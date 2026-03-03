@@ -1,0 +1,132 @@
+{
+  "projectType": "saas",
+  "projectName": "Synto Mobile",
+  "projectDescription": "AI-powered mobile wallet for Solana that transforms blockchain interactions into natural language conversations.",
+  "theme": "almond",
+  "primaryColor": "#9945FF",
+  "lightColor": "#14F195",
+  "darkColor": "#9945FF",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/ai-chat-interface",
+              "features/wallet-operations",
+              "features/mobile-wallet-adapter"
+            ]
+          },
+          {
+            "group": "AI Agent",
+            "pages": [
+              "ai-agent/overview",
+              "ai-agent/capabilities",
+              "ai-agent/plugins"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/token-operations",
+              "guides/defi-operations",
+              "guides/swapping-tokens",
+              "guides/staking",
+              "guides/lending"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/architecture",
+              "development/components",
+              "development/hooks",
+              "development/building"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Agent Core",
+            "pages": [
+              "api/solana-agent-kit",
+              "api/agent-builder"
+            ]
+          },
+          {
+            "group": "Token Plugin",
+            "pages": [
+              "api/token/overview",
+              "api/token/balance-operations",
+              "api/token/transfer",
+              "api/token/jupiter-integration"
+            ]
+          },
+          {
+            "group": "DeFi Plugin",
+            "pages": [
+              "api/defi/overview",
+              "api/defi/rainfi-loans"
+            ]
+          },
+          {
+            "group": "Components",
+            "pages": [
+              "api/components/chat",
+              "api/components/wallet",
+              "api/components/account"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "AI-powered chat interface for blockchain interactions",
+    "Mobile Wallet Adapter integration with Solana Mobile Stack",
+    "Token operations (send, receive, balance queries)",
+    "DeFi operations (Jupiter swaps, staking, RainFi loans)",
+    "Natural language blockchain commands",
+    "Plugin-based AI agent architecture",
+    "React Native & Expo mobile-first design",
+    "Real-time transaction processing"
+  ],
+  "publicApiSurface": [
+    "SolanaAgentKit - Core agent class for blockchain operations",
+    "agentBuilder - Factory function for creating configured agent instances",
+    "createLangchainTools - Generate LangChain-compatible tools from agent",
+    "createVercelAITools - Generate Vercel AI SDK tools from agent",
+    "TokenPlugin - Plugin for token operations (transfer, balance, swap, stake)",
+    "DefiPlugin - Plugin for DeFi operations (loans, repayment)",
+    "get_balance - Get SOL balance for wallet",
+    "get_token_balance - Get SPL token balances",
+    "transfer - Transfer SOL or SPL tokens",
+    "trade - Execute token swaps via Jupiter",
+    "stakeWithJup - Stake tokens with Jupiter",
+    "fetchPrice - Get token price data",
+    "GetUserLoans - Retrieve RainFi loan information",
+    "RepayLoan - Repay RainFi loans",
+    "quoteLoanCalculator - Calculate loan quotes",
+    "getTPS - Get current network TPS",
+    "request_faucet_funds - Request devnet/testnet airdrops",
+    "closeEmptyTokenAccounts - Close empty token accounts",
+    "getWalletAddress - Get wallet public key",
+    "useAgent - React hook for AI agent integration",
+    "useMultiChat - React hook for managing multiple chat sessions",
+    "useAuthorization - React hook for wallet authorization",
+    "useMobileWallet - React hook for Mobile Wallet Adapter"
+  ]
+}
