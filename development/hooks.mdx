@@ -1,0 +1,791 @@
+---
+title: Custom React hooks
+description: Reusable hooks for authentication, blockchain interactions, chat management, and more
+---
+
+## Overview
+
+Synto Mobile uses custom React hooks to encapsulate complex logic and promote code reuse. Hooks are organized in the `/hooks` directory and provide clean APIs for common functionality.
+
+## Available hooks
+
+```bash hooks/
+hooks/
+├── use-agent.tsx           # Solana agent for AI-powered blockchain actions
+├── use-color-scheme.ts     # Theme detection
+├── use-multi-chat.tsx      # Multi-chat conversation management
+├── use-require-auth.tsx    # Authentication guard
+├── use-theme-color.ts      # Theme color extraction
+└── use-track-locations.ts  # Route tracking for analytics
+```
+
+## Authentication hooks
+
+### useAuth
+
+Core authentication hook provided by AuthProvider.
+
+**Location:** `components/auth/auth-provider.tsx`
+
+```tsx
+export interface AuthState {
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  hasCompletedOnboarding: boolean;
+  signIn: () => Promise<Account>;
+  signOut: () => Promise<void>;
+  markOnboardingComplete: () => Promise<void>;
+  checkAuthAndRedirect: () => void;
+}
+
+export function useAuth(): AuthState {
+  const value = use(Context);
+  if (!value) {
+    throw new Error("useAuth must be wrapped in a <AuthProvider />");
+  }
+  return value;
+}
+```
+
+<Tabs>
+  <Tab title="Basic usage">
+    ```tsx
+    function MyComponent() {
+      const { isAuthenticated, isLoading, signIn, signOut } = useAuth();
+      
+      if (isLoading) {
+        return <ActivityIndicator />;
+      }
+      
+      if (!isAuthenticated) {
+        return <Button onPress={signIn}>Connect Wallet</Button>;
+      }
+      
+      return (
+        <View>
+          <Text>Connected!</Text>
+          <Button onPress={signOut}>Disconnect</Button>
+        </View>
+      );
+    }
+    ```
+  </Tab>
+  
+  <Tab title="With onboarding">
+    ```tsx
+    function OnboardingScreen() {
+      const { hasCompletedOnboarding, markOnboardingComplete } = useAuth();
+      
+      const handleComplete = async () => {
+        await markOnboardingComplete();
+        // User will be redirected to sign-in automatically
+      };
+      
+      return <Button onPress={handleComplete}>Get Started</Button>;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+The `checkAuthAndRedirect` function is called automatically by the AuthProvider. You rarely need to call it manually.
+</Note>
+
+### useRequireAuth
+
+Convenience hook for protected screens that require authentication.
+
+**Location:** `hooks/use-require-auth.tsx`
+
+```tsx
+export function useRequireAuth() {
+  const { isAuthenticated, isLoading, checkAuthAndRedirect } = useAuth();
+  
+  useEffect(() => {
+    if (!isLoading) {
+      checkAuthAndRedirect();
+    }
+  }, [isAuthenticated, isLoading, checkAuthAndRedirect]);
+  
+  return {
+    isAuthenticated,
+    isLoading,
+    isReady: !isLoading && isAuthenticated,
+  };
+}
+```
+
+<CodeGroup>
+```tsx Usage example
+function ProtectedScreen() {
+  const { isReady } = useRequireAuth();
+  
+  if (!isReady) {
+    return <LoadingSpinner />;
+  }
+  
+  return <YourProtectedContent />;
+}
+```
+
+```tsx Real example from chat screen
+export default function ChatScreen() {
+  const { isReady } = useRequireAuth();
+  
+  if (!isReady) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
+  
+  return <ChatInterface />;
+}
+```
+</CodeGroup>
+
+## Solana blockchain hooks
+
+### useSolanaAgent
+
+Creates an AI-powered Solana agent with blockchain action capabilities.
+
+**Location:** `hooks/use-agent.tsx`
+
+```tsx
+export function useSolanaAgent() {
+  const { signAndSendTransaction, signTransactions, signMessage } = useMobileWallet();
+  const { account } = useWalletUi();
+  
+  const agent = useMemo(() => {
+    if (!account?.publicKey) return null;
+    
+    const fns = {
+      signTransaction: async <T extends Transaction | VersionedTransaction>(tx: T): Promise<T> => {
+        if (tx instanceof Transaction) {
+          throw new Error(
+            "Legacy Transaction signing not supported. Use VersionedTransaction instead."
+          );
+        }
+        const signed = await signTransactions([tx as VersionedTransaction]);
+        return signed[0] as T;
+      },
+      signMessage: async (msg: Uint8Array) => {
+        return await signMessage(msg);
+      },
+      sendTransaction: async <T extends Transaction | VersionedTransaction>(tx: T) => {
+        return await signAndSendTransaction(tx);
+      },
+      signAllTransactions: async <T extends Transaction | VersionedTransaction>(txs: T[]) => {
+        const signed = await signTransactions(txs as VersionedTransaction[]);
+        return signed as T[];
+      },
+      publicKey: account.publicKey,
+    };
+    
+    return agentBuilder(fns, { signOnly: false });
+  }, [account, signAndSendTransaction, signTransactions, signMessage]);
+  
+  const tools = useMemo(() => {
+    if (agent) {
+      return createVercelAITools(agent, agent.actions);
+    }
+    return null;
+  }, [agent]);
+  
+  return { agent, tools, isReady: !!agent };
+}
+```
+
+<Warning>
+**Important:** The agent is only available when a wallet is connected. Always check `isReady` before using the agent or tools.
+</Warning>
+
+#### Return values
+
+<ResponseField name="agent" type="SolanaAgentKit | null">
+  The agent instance with all registered actions and plugins. `null` if no wallet is connected.
+</ResponseField>
+
+<ResponseField name="tools" type="VercelAITools | null">
+  Tools formatted for Vercel AI SDK integration. Used in chat functionality.
+</ResponseField>
+
+<ResponseField name="isReady" type="boolean">
+  `true` when the agent is fully initialized and ready to use.
+</ResponseField>
+
+#### Available agent actions
+
+The agent comes with pre-configured plugins:
+
+<AccordionGroup>
+  <Accordion title="Token Plugin">
+    - `GET_BALANCE` - Get SOL balance
+    - `GET_BALANCE_OTHER` - Get balance of other wallets
+    - `GET_TOKEN_BALANCES` - List all token holdings
+    - `TRANSFER` - Send SOL or tokens
+    - `REQUEST_FAUCET_FUNDS` - Get devnet/testnet airdrop
+    - `GET_TPS` - Current network TPS
+    - `CLOSE_EMPTY_TOKEN_ACCOUNTS` - Clean up empty token accounts
+  </Accordion>
+  
+  <Accordion title="Jupiter Plugin">
+    - `FETCH_PRICE` - Get token prices
+    - `GET_TOKEN_DATA_BY_TICKER` - Search tokens by symbol
+    - `TRADE` - Execute token swaps
+    - `STAKE_WITH_JUP` - Stake with Jupiter
+  </Accordion>
+  
+  <Accordion title="DexScreener Plugin">
+    - `GET_TOKEN_DATA` - Fetch comprehensive token data and metrics
+  </Accordion>
+  
+  <Accordion title="DeFi Plugin">
+    - `RAINFI_TRANSACTION_BUILDER` - Build RainFi lending transactions
+    - `QUOTE_LOAN_CALCULATOR` - Calculate loan quotes
+    - `GET_USER_LOANS` - Fetch user's active loans
+    - `REPAY_LOAN` - Repay lending positions
+  </Accordion>
+</AccordionGroup>
+
+### useMobileWallet
+
+Low-level wallet interaction hook.
+
+**Location:** `components/solana/use-mobile-wallet.tsx`
+
+```tsx
+export function useMobileWallet() {
+  return {
+    connect: () => Promise<Account>,
+    signIn: (payload: SignInPayload) => Promise<Account>,
+    disconnect: () => Promise<void>,
+    signAndSendTransaction: (tx: Transaction | VersionedTransaction) => Promise<TransactionSignature>,
+    signMessage: (message: Uint8Array) => Promise<Uint8Array>,
+    signTransactions: (txs: VersionedTransaction[]) => Promise<VersionedTransaction[]>,
+  };
+}
+```
+
+<Tabs>
+  <Tab title="Sign and send">
+    ```tsx
+    function SendTransaction() {
+      const { signAndSendTransaction } = useMobileWallet();
+      const { account } = useWalletUi();
+      
+      const handleSend = async () => {
+        const transaction = new VersionedTransaction(/* ... */);
+        const signature = await signAndSendTransaction(transaction);
+        console.log('Transaction sent:', signature);
+      };
+      
+      return <Button onPress={handleSend}>Send</Button>;
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Sign message">
+    ```tsx
+    function SignMessage() {
+      const { signMessage } = useMobileWallet();
+      
+      const handleSign = async () => {
+        const message = new TextEncoder().encode('Hello, Solana!');
+        const signature = await signMessage(message);
+        console.log('Signed:', signature);
+      };
+      
+      return <Button onPress={handleSign}>Sign Message</Button>;
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Error handling">
+    ```tsx
+    function SafeTransaction() {
+      const { signAndSendTransaction } = useMobileWallet();
+      
+      const handleSend = async () => {
+        try {
+          const signature = await signAndSendTransaction(transaction);
+          Alert.alert('Success', `Transaction sent: ${signature}`);
+        } catch (error) {
+          // Wallet errors automatically trigger disconnect if auth-related
+          Alert.alert('Error', error.message);
+        }
+      };
+      
+      return <Button onPress={handleSend}>Send</Button>;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+The hook includes automatic error handling that disconnects the wallet on authorization errors.
+</Note>
+
+### Account query hooks
+
+These hooks use TanStack Query for automatic caching and refetching.
+
+<AccordionGroup>
+  <Accordion title="useGetBalance">
+    **Location:** `components/account/use-get-balance.tsx`
+    
+    ```tsx
+    export function useGetBalance({ address }: { address: PublicKey }) {
+      const connection = useConnection();
+      const queryKey = useGetBalanceQueryKey({ 
+        address, 
+        endpoint: connection.rpcEndpoint 
+      });
+      
+      return useQuery({
+        queryKey,
+        queryFn: () => connection.getBalance(address),
+      });
+    }
+    
+    export function useGetBalanceInvalidate({ address }: { address: PublicKey }) {
+      const connection = useConnection();
+      const queryKey = useGetBalanceQueryKey({ address, endpoint: connection.rpcEndpoint });
+      const client = useQueryClient();
+      
+      return () => client.invalidateQueries({ queryKey });
+    }
+    ```
+    
+    **Usage:**
+    ```tsx
+    function BalanceDisplay() {
+      const { account } = useWalletUi();
+      const { data: balance, isLoading } = useGetBalance({ 
+        address: account.publicKey 
+      });
+      
+      if (isLoading) return <Skeleton />;
+      
+      return <Text>{balance / LAMPORTS_PER_SOL} SOL</Text>;
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="useGetTokenAccounts">
+    **Location:** `components/account/use-get-token-accounts.tsx`
+    
+    Fetches all SPL token accounts for a given address.
+    
+    ```tsx
+    export function useGetTokenAccounts({ address }: { address: PublicKey }) {
+      const connection = useConnection();
+      
+      return useQuery({
+        queryKey: ['get-token-accounts', { endpoint: connection.rpcEndpoint, address }],
+        queryFn: async () => {
+          const accounts = await connection.getParsedTokenAccountsByOwner(
+            address,
+            { programId: TOKEN_PROGRAM_ID }
+          );
+          return accounts.value;
+        },
+      });
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="useTransferSol">
+    **Location:** `components/account/use-transfer-sol.tsx`
+    
+    Mutation hook for sending SOL.
+    
+    ```tsx
+    function SendSol() {
+      const { account } = useWalletUi();
+      const { mutate: transfer, isPending } = useTransferSol({ 
+        address: account.publicKey 
+      });
+      
+      const handleSend = () => {
+        transfer({
+          destination: new PublicKey('...'),
+          amount: 0.1 * LAMPORTS_PER_SOL,
+        });
+      };
+      
+      return (
+        <Button onPress={handleSend} disabled={isPending}>
+          {isPending ? 'Sending...' : 'Send 0.1 SOL'}
+        </Button>
+      );
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="useRequestAirdrop">
+    **Location:** `components/account/use-request-airdrop.tsx`
+    
+    Request devnet/testnet airdrop.
+    
+    ```tsx
+    function AirdropButton() {
+      const { account } = useWalletUi();
+      const { mutate: requestAirdrop, isPending } = useRequestAirdrop({ 
+        address: account.publicKey 
+      });
+      
+      return (
+        <Button 
+          onPress={() => requestAirdrop(1)} 
+          disabled={isPending}
+        >
+          Request 1 SOL Airdrop
+        </Button>
+      );
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Chat management hooks
+
+### useMultiChat
+
+Manages multiple chat conversations with persistence.
+
+**Location:** `hooks/use-multi-chat.tsx`
+
+```tsx
+interface UseMultiChatReturn {
+  // Current chat state
+  currentChat: Chat | null;
+  currentChatId: string | null;
+  
+  // Chat list
+  chatList: ChatMetadata[];
+  
+  // Actions
+  createNewChat: (firstMessage?: string) => Promise<Chat>;
+  loadChat: (chatId: string) => Promise<void>;
+  deleteChat: (chatId: string) => Promise<void>;
+  updateChatTitle: (chatId: string, title: string) => Promise<void>;
+  syncMessages: (messages: Message[]) => Promise<void>;
+  
+  // Loading states
+  isLoadingChat: boolean;
+  isLoadingList: boolean;
+}
+
+export function useMultiChat(): UseMultiChatReturn {
+  // Implementation
+}
+```
+
+<Tabs>
+  <Tab title="Basic usage">
+    ```tsx
+    function ChatInterface() {
+      const {
+        currentChat,
+        chatList,
+        createNewChat,
+        loadChat,
+        syncMessages,
+      } = useMultiChat();
+      
+      const { messages } = useChat({
+        initialMessages: currentChat?.messages || [],
+      });
+      
+      // Sync messages to storage
+      useEffect(() => {
+        if (messages.length > 0 && currentChat) {
+          syncMessages(messages);
+        }
+      }, [messages, currentChat, syncMessages]);
+      
+      return <ChatUI messages={messages} />;
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Chat list">
+    ```tsx
+    function ChatHistory() {
+      const { chatList, loadChat, deleteChat } = useMultiChat();
+      
+      return (
+        <FlatList
+          data={chatList}
+          renderItem={({ item }) => (
+            <ChatListItem
+              chat={item}
+              onPress={() => loadChat(item.id)}
+              onDelete={() => deleteChat(item.id)}
+            />
+          )}
+        />
+      );
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Create new chat">
+    ```tsx
+    function NewChatButton() {
+      const { createNewChat } = useMultiChat();
+      
+      const handleNewChat = async () => {
+        const chat = await createNewChat('What is my balance?');
+        console.log('New chat created:', chat.id);
+      };
+      
+      return <Button onPress={handleNewChat}>New Chat</Button>;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+**Key features:**
+
+- Automatic persistence using AsyncStorage via `ChatStorageService`
+- Auto-generates chat titles from first message
+- Tracks last active chat
+- Handles chat deletion with automatic fallback
+- Syncs messages from AI SDK to storage
+
+<Note>
+The `syncMessages` function is debounced internally to avoid excessive writes. It's safe to call on every message update.
+</Note>
+
+## Cluster & network hooks
+
+### useCluster
+
+Manages Solana network selection.
+
+**Location:** `components/cluster/cluster-provider.tsx`
+
+```tsx
+export interface ClusterProviderContext {
+  selectedCluster: Cluster;
+  clusters: Cluster[];
+  setSelectedCluster: (cluster: Cluster) => void;
+  getExplorerUrl(path: string): string;
+}
+
+export function useCluster(): ClusterProviderContext {
+  return useContext(Context);
+}
+```
+
+<CodeGroup>
+```tsx Network selector
+function NetworkSelector() {
+  const { selectedCluster, clusters, setSelectedCluster } = useCluster();
+  
+  return (
+    <Picker
+      selectedValue={selectedCluster.id}
+      onValueChange={(id) => {
+        const cluster = clusters.find(c => c.id === id);
+        if (cluster) setSelectedCluster(cluster);
+      }}
+    >
+      {clusters.map(cluster => (
+        <Picker.Item 
+          key={cluster.id} 
+          label={cluster.name} 
+          value={cluster.id} 
+        />
+      ))}
+    </Picker>
+  );
+}
+```
+
+```tsx Explorer link
+function TransactionLink({ signature }: { signature: string }) {
+  const { getExplorerUrl } = useCluster();
+  
+  const url = getExplorerUrl(`tx/${signature}`);
+  
+  return (
+    <TouchableOpacity onPress={() => Linking.openURL(url)}>
+      <Text>View on Explorer</Text>
+    </TouchableOpacity>
+  );
+}
+```
+</CodeGroup>
+
+### useConnection
+
+Accesses the current Solana RPC connection.
+
+**Location:** `components/solana/solana-provider.tsx`
+
+```tsx
+export function useConnection(): Connection {
+  return useSolana().connection;
+}
+```
+
+**Usage:**
+```tsx
+function GetSlot() {
+  const connection = useConnection();
+  const [slot, setSlot] = useState<number>();
+  
+  useEffect(() => {
+    connection.getSlot().then(setSlot);
+  }, [connection]);
+  
+  return <Text>Current slot: {slot}</Text>;
+}
+```
+
+<Warning>
+The connection instance changes when the cluster is switched. Use it in `useMemo` or `useEffect` dependencies.
+</Warning>
+
+## Theme hooks
+
+### useColorScheme
+
+Detects the device's color scheme (light/dark).
+
+**Location:** `hooks/use-color-scheme.ts`
+
+```tsx
+export { useColorScheme } from "react-native";
+```
+
+**Usage:**
+```tsx
+function ThemedComponent() {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  
+  return (
+    <View style={{ backgroundColor: isDark ? '#000' : '#fff' }}>
+      <Text style={{ color: isDark ? '#fff' : '#000' }}>
+        Current theme: {colorScheme}
+      </Text>
+    </View>
+  );
+}
+```
+
+### useAppTheme
+
+Provides React Navigation theme based on color scheme.
+
+**Location:** `components/app-theme.tsx`
+
+```tsx
+export function useAppTheme() {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === "dark";
+  const theme = isDark ? AppThemeDark : AppThemeLight;
+  
+  return { colorScheme, isDark, theme };
+}
+```
+
+## Analytics hooks
+
+### useTrackLocations
+
+Tracks route changes for analytics.
+
+**Location:** `hooks/use-track-locations.ts`
+
+```tsx
+export function useTrackLocations(
+  onChange: (pathname: string, params: UnknownOutputParams) => void
+) {
+  const pathname = usePathname();
+  const params = useGlobalSearchParams();
+  
+  useEffect(() => {
+    onChange(pathname, params);
+  }, [onChange, pathname, params]);
+}
+```
+
+**Usage:**
+```tsx app/_layout.tsx
+export default function RootLayout() {
+  useTrackLocations((pathname, params) => {
+    console.log(`Track ${pathname}`, { params });
+    // Send to analytics service
+    analytics.track('page_view', { pathname, ...params });
+  });
+  
+  return <RootNavigator />;
+}
+```
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Hook dependencies">
+    Always include all dependencies in `useEffect`, `useMemo`, and `useCallback`:
+    
+    ```tsx
+    // ✅ Good
+    const agent = useMemo(() => {
+      return agentBuilder(fns, config);
+    }, [fns, config]);
+    
+    // ❌ Bad
+    const agent = useMemo(() => {
+      return agentBuilder(fns, config);
+    }, []); // Missing dependencies!
+    ```
+  </Accordion>
+  
+  <Accordion title="Error handling">
+    Always handle errors in async hooks:
+    
+    ```tsx
+    const { mutate: transfer } = useTransferSol({ address });
+    
+    const handleSend = async () => {
+      try {
+        await transfer({ destination, amount });
+        Alert.alert('Success');
+      } catch (error) {
+        Alert.alert('Error', error.message);
+      }
+    };
+    ```
+  </Accordion>
+  
+  <Accordion title="Loading states">
+    Show loading indicators for async operations:
+    
+    ```tsx
+    const { data, isLoading, error } = useGetBalance({ address });
+    
+    if (isLoading) return <Skeleton />;
+    if (error) return <ErrorMessage error={error} />;
+    return <BalanceDisplay balance={data} />;
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Component structure" icon="cubes" href="/development/components">
+    Learn about component organization
+  </Card>
+  <Card title="Building the app" icon="hammer" href="/development/building">
+    Build and deployment guide
+  </Card>
+</CardGroup>

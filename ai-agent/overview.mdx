@@ -1,0 +1,168 @@
+---
+title: AI agent overview
+description: Discover how Synto Mobile's AI agent automates blockchain operations on Solana with intelligent plugins
+---
+
+Synto Mobile features a powerful AI agent built on the Solana blockchain that enables you to execute complex operations through natural language commands. The agent uses a modular plugin architecture to provide capabilities ranging from token transfers to DeFi lending.
+
+## How it works
+
+The AI agent is powered by the `SolanaAgentKit`, a flexible framework that connects to the Solana blockchain and executes actions on your behalf. When you interact with the agent, it:
+
+1. **Understands your intent** - Natural language processing identifies what you want to accomplish
+2. **Selects the right plugin** - Matches your request to available actions across plugins
+3. **Executes securely** - Signs and sends transactions through your connected wallet
+4. **Returns results** - Provides clear feedback on transaction status and outcomes
+
+<Note>
+All agent operations require wallet authentication and your explicit approval for transactions.
+</Note>
+
+## Architecture
+
+The agent is built with a modular plugin system that makes it easy to extend functionality:
+
+```typescript
+// Core agent initialization
+const agent = new SolanaAgentKit(
+  wallet,      // Your wallet connection
+  rpcUrl,      // Solana RPC endpoint
+  config       // Agent configuration
+);
+
+// Plugins are added dynamically
+const agentWithPlugins = agent
+  .use(TokenPlugin)
+  .use(DefiPlugin);
+```
+
+<CardGroup cols={2}>
+  <Card title="Plugin system" icon="puzzle-piece">
+    Plugins add new capabilities to the agent without modifying core code
+  </Card>
+  <Card title="Action handlers" icon="bolt">
+    Each action has a schema, examples, and handler function for execution
+  </Card>
+  <Card title="Type-safe" icon="shield-check">
+    Full TypeScript support with input validation using Zod schemas
+  </Card>
+  <Card title="Extensible" icon="arrow-up-right-dots">
+    Add custom plugins for your specific use cases
+  </Card>
+</CardGroup>
+
+## Core components
+
+The agent architecture consists of several key components:
+
+<Accordion title="SolanaAgentKit core">
+The main class that manages blockchain connections, wallet integration, and plugin orchestration. It provides:
+
+- **Connection management** - Maintains RPC connection to Solana
+- **Wallet integration** - Handles transaction signing and sending
+- **Plugin registry** - Tracks loaded plugins and their methods
+- **Action dispatcher** - Routes commands to appropriate handlers
+
+Source: `utils/syntoUtils/agent/core/index.ts:43`
+</Accordion>
+
+<Accordion title="Plugin interface">
+Every plugin implements a standard interface:
+
+```typescript
+interface Plugin {
+  name: string;                          // Unique plugin identifier
+  methods: Record<string, any>;          // Callable methods
+  actions: Action[];                     // Available actions
+  initialize(agent: SolanaAgentKit): void; // Setup function
+}
+```
+
+Plugins can access the full agent instance to execute blockchain operations.
+</Accordion>
+
+<Accordion title="Action system">
+Actions define how the agent responds to user commands:
+
+- **Name** - Unique identifier for the action
+- **Similes** - Alternative phrases that trigger the action
+- **Description** - What the action does
+- **Examples** - Input/output examples for AI training
+- **Schema** - Zod validation schema for inputs
+- **Handler** - Async function that executes the action
+
+Source: `utils/syntoUtils/agent/types/index.ts:110`
+</Accordion>
+
+## Agent configuration
+
+You can configure the agent with various options to customize behavior:
+
+<Tabs>
+  <Tab title="Basic setup">
+    ```typescript
+    const agent = agentBuilder({
+      signAndSendTransaction,
+      signTransaction,
+      signMessage,
+      publicKey,
+      sendTransaction,
+      signAllTransactions
+    });
+    ```
+  </Tab>
+  <Tab title="With options">
+    ```typescript
+    const agent = agentBuilder(walletFunctions, {
+      signOnly: false,
+      JUPITER_REFERRAL_ACCOUNT: "your-referral",
+      JUPITER_FEE_BPS: 50,
+      PRIORITY_LEVEL: "high"
+    });
+    ```
+  </Tab>
+  <Tab title="RPC configuration">
+    The agent uses your configured RPC endpoint:
+    
+    ```typescript
+    // Uses environment variable or defaults to devnet
+    const rpc = process.env.NEXT_PUBLIC_SOLANA_RPC 
+      ?? clusterApiUrl(ClusterNetwork.Devnet);
+    ```
+  </Tab>
+</Tabs>
+
+## Security model
+
+<Warning>
+The agent can only perform operations that you explicitly authorize through your connected wallet.
+</Warning>
+
+Security features include:
+
+- **Wallet-based authentication** - All transactions require wallet signatures
+- **Transaction preview** - Review operations before signing
+- **Forbidden actions** - Certain high-risk actions are disabled (e.g., `LAUNCH_PUMPFUN_TOKEN`)
+- **Input validation** - All inputs validated with Zod schemas before execution
+- **Sign-only mode** - Option to sign transactions without broadcasting
+
+## Network support
+
+The agent works across Solana networks:
+
+- **Mainnet** - Production blockchain with real assets
+- **Devnet** - Development network for testing
+- **Testnet** - Public testing environment
+
+The network is determined by your RPC endpoint configuration.
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Explore capabilities" icon="wand-magic-sparkles" href="/ai-agent/capabilities">
+    See what the AI agent can do for you
+  </Card>
+  <Card title="Available plugins" icon="puzzle-piece" href="/ai-agent/plugins">
+    Learn about token and DeFi plugins
+  </Card>
+</CardGroup>

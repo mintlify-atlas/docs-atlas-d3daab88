@@ -1,0 +1,643 @@
+---
+title: Wallet operations
+description: View balances, manage tokens, and execute transfers with Synto Mobile's comprehensive wallet features
+---
+
+Synto Mobile provides a full-featured wallet interface for managing Solana assets. The wallet screen displays your SOL balance, token holdings, and offers quick actions for common operations like sending, receiving, and requesting airdrops.
+
+## Wallet screen overview
+
+The main wallet interface consists of three key sections:
+
+<CardGroup cols={3}>
+  <Card title="Balance display" icon="coins">
+    Shows SOL balance with real-time updates
+  </Card>
+  <Card title="Action buttons" icon="hand-pointer">
+    Quick access to send, receive, and airdrop
+  </Card>
+  <Card title="Token list" icon="list">
+    Displays all SPL tokens with balances
+  </Card>
+</CardGroup>
+
+<Info>
+The wallet screen requires an active connection through Mobile Wallet Adapter. Connect your wallet to view balances and perform operations.
+</Info>
+
+## Connecting your wallet
+
+Before accessing wallet features, you must establish a connection:
+
+<Steps>
+  <Step title="Navigate to wallet tab">
+    Tap the wallet icon in the bottom navigation bar.
+  </Step>
+  
+  <Step title="Tap connect button">
+    If no wallet is connected, you'll see a "Connect" button. Tap it to initiate the connection flow.
+  </Step>
+  
+  <Step title="Choose wallet app">
+    Your device will show available wallet apps (Phantom, Solflare, etc.). Select your preferred wallet.
+  </Step>
+  
+  <Step title="Authorize connection">
+    Approve the connection request in your wallet app. Synto Mobile requests:
+    - Read your public address
+    - Request transaction approvals
+    - Sign messages
+  </Step>
+</Steps>
+
+### Connection component
+
+The connection flow uses the `WalletUiButtonConnect` component:
+
+```typescript
+export function WalletUiButtonConnect({ label = "Connect" }: { label?: string }) {
+  const { connect } = useWalletUi();
+  
+  return <BaseButton label={label} onPress={() => connect()} />;
+}
+```
+
+This triggers the `useMobileWallet` hook which handles the MWA protocol:
+
+```typescript
+const connect = useCallback(async (): Promise<Account> => {
+  try {
+    return await transact(async (wallet) => {
+      return await authorizeSession(wallet);
+    });
+  } catch (error) {
+    await handleWalletError(error);
+    throw error;
+  }
+}, [authorizeSession, handleWalletError]);
+```
+
+## Viewing balances
+
+### SOL balance
+
+The primary SOL balance is displayed prominently using the `AccountUiBalance` component:
+
+```typescript
+<AppView style={{ alignItems: "center", gap: 4 }}>
+  <AccountUiBalance address={account.publicKey} />
+  <AppText style={{ opacity: 0.7 }}>
+    {ellipsify(account.publicKey.toString(), 8)}
+  </AppText>
+</AppView>
+```
+
+**Features:**
+- Real-time balance updates via React Query
+- Formatted display with SOL symbol
+- Ellipsified address (e.g., `7xKX...4J2p`)
+- Pull-to-refresh support
+
+### Token accounts
+
+All SPL tokens are fetched and displayed using `AccountUiTokenAccounts`:
+
+```typescript
+<AccountUiTokenAccounts address={account.publicKey} />
+```
+
+This component:
+- Queries token accounts using `useGetTokenAccounts`
+- Displays token symbols and balances
+- Shows token logos when available
+- Groups tokens by type
+
+<Tabs>
+  <Tab title="Fetching balances">
+    Balances are fetched using the `useGetBalance` hook:
+    
+    ```typescript
+    const { data: balance, isLoading, error } = useQuery({
+      queryKey: ['get-balance', { endpoint, address }],
+      queryFn: () => connection.getBalance(address)
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Token accounts">
+    Token accounts are fetched with `useGetTokenAccounts`:
+    
+    ```typescript
+    const { data: tokenAccounts } = useQuery({
+      queryKey: ['get-token-accounts', { endpoint, address }],
+      queryFn: async () => {
+        const accounts = await connection.getParsedTokenAccountsByOwner(
+          address,
+          { programId: TOKEN_PROGRAM_ID }
+        );
+        return accounts.value;
+      }
+    });
+    ```
+  </Tab>
+</Tabs>
+
+### Pull-to-refresh
+
+Users can refresh balances by pulling down on the wallet screen:
+
+```typescript
+const onRefresh = useCallback(async () => {
+  setRefreshing(true);
+  await Promise.all([
+    invalidateBalance(),
+    invalidateTokenAccounts()
+  ]);
+  setRefreshing(false);
+}, [invalidateBalance, invalidateTokenAccounts]);
+
+return (
+  <ScrollView
+    refreshControl={
+      <RefreshControl 
+        refreshing={refreshing} 
+        onRefresh={onRefresh} 
+      />
+    }
+  >
+    {/* Wallet content */}
+  </ScrollView>
+);
+```
+
+<Note>
+Invalidation functions trigger React Query to refetch data from the blockchain, ensuring balances are always current.
+</Note>
+
+## Quick action buttons
+
+Three primary actions are available via `AccountUiButtons`:
+
+```typescript
+export function AccountUiButtons() {
+  const router = useRouter();
+  return (
+    <View style={{ flexDirection: "row", gap: 8, justifyContent: "center" }}>
+      <Button onPressIn={() => router.navigate("/(tabs)/account/airdrop")}>
+        Airdrop
+      </Button>
+      <Button onPressIn={() => router.navigate("/(tabs)/account/send")}>
+        Send
+      </Button>
+      <Button onPressIn={() => router.navigate("/(tabs)/account/receive")}>
+        Receive
+      </Button>
+    </View>
+  );
+}
+```
+
+<CardGroup cols={3}>
+  <Card title="Airdrop" icon="parachute-box">
+    Request devnet/testnet SOL for testing
+  </Card>
+  <Card title="Send" icon="paper-plane">
+    Transfer SOL or tokens to another address
+  </Card>
+  <Card title="Receive" icon="download">
+    Display your address and QR code
+  </Card>
+</CardGroup>
+
+## Sending SOL
+
+The send flow allows transferring SOL to any Solana address.
+
+### Transfer workflow
+
+<Steps>
+  <Step title="Tap send button">
+    Navigate to the send screen from the wallet tab.
+  </Step>
+  
+  <Step title="Enter recipient">
+    Input the destination address or scan a QR code.
+  </Step>
+  
+  <Step title="Specify amount">
+    Enter the SOL amount to send. Balance is displayed for reference.
+  </Step>
+  
+  <Step title="Review transaction">
+    Confirm the recipient address and amount are correct.
+  </Step>
+  
+  <Step title="Approve in wallet">
+    Your wallet app will prompt for transaction approval. Review fees and approve.
+  </Step>
+  
+  <Step title="Wait for confirmation">
+    Transaction is submitted to the blockchain. A signature is returned immediately, but confirmation takes a few seconds.
+  </Step>
+</Steps>
+
+### Transfer implementation
+
+The `useTransferSol` hook handles the complete transfer lifecycle:
+
+```typescript
+export function useTransferSol({ address }: { address: PublicKey }) {
+  const connection = useConnection();
+  const { signAndSendTransaction } = useWalletUi();
+  const invalidateBalance = useGetBalanceInvalidate({ address });
+  
+  return useMutation({
+    mutationKey: ['transfer-sol', { endpoint: connection.rpcEndpoint, address }],
+    mutationFn: async (input: { destination: PublicKey; amount: number }) => {
+      let signature: TransactionSignature = "";
+      try {
+        const { transaction, latestBlockhash, minContextSlot } = 
+          await createTransaction({
+            publicKey: address,
+            destination: input.destination,
+            amount: input.amount,
+            connection,
+          });
+        
+        // Sign and send transaction
+        signature = await signAndSendTransaction(transaction, minContextSlot);
+        
+        // Wait for confirmation
+        await connection.confirmTransaction(
+          { signature, ...latestBlockhash },
+          'confirmed'
+        );
+        
+        return signature;
+      } catch (error: unknown) {
+        console.log('Transaction failed', error, signature);
+        throw error;
+      }
+    },
+    onSuccess: async (signature) => {
+      console.log('Transaction successful:', signature);
+      await invalidateBalance();
+    },
+    onError: (error) => {
+      console.error('Transaction failed:', error);
+    },
+  });
+}
+```
+
+### Transaction creation
+
+The `createTransaction` function builds a proper Solana transaction:
+
+```typescript
+import { 
+  SystemProgram, 
+  Transaction, 
+  LAMPORTS_PER_SOL 
+} from '@solana/web3.js';
+
+export async function createTransaction({
+  publicKey,
+  destination,
+  amount,
+  connection
+}) {
+  // Get latest blockhash
+  const { blockhash, lastValidBlockHeight } = 
+    await connection.getLatestBlockhash();
+  
+  // Get minimum slot
+  const minContextSlot = await connection.getSlot();
+  
+  // Create transfer instruction
+  const transaction = new Transaction({
+    feePayer: publicKey,
+    blockhash,
+    lastValidBlockHeight,
+  }).add(
+    SystemProgram.transfer({
+      fromPubkey: publicKey,
+      toPubkey: destination,
+      lamports: amount * LAMPORTS_PER_SOL,
+    })
+  );
+  
+  return { 
+    transaction, 
+    latestBlockhash: { blockhash, lastValidBlockHeight },
+    minContextSlot 
+  };
+}
+```
+
+<Warning>
+Transactions cannot be reversed once confirmed on the blockchain. Always double-check recipient addresses before approving.
+</Warning>
+
+## Requesting airdrops
+
+On devnet and testnet, users can request SOL airdrops:
+
+### Airdrop flow
+
+<Steps>
+  <Step title="Navigate to airdrop">
+    Tap the "Airdrop" button from the wallet screen.
+  </Step>
+  
+  <Step title="Request SOL">
+    Tap "Request Airdrop" to receive 1 SOL (devnet/testnet only).
+  </Step>
+  
+  <Step title="Wait for confirmation">
+    The airdrop transaction is submitted and confirmed automatically.
+  </Step>
+  
+  <Step title="Balance updates">
+    Your SOL balance refreshes to show the new amount.
+  </Step>
+</Steps>
+
+### Implementation
+
+The `useRequestAirdrop` hook manages airdrop requests:
+
+```typescript
+export function useRequestAirdrop({ address }: { address: PublicKey }) {
+  const connection = useConnection();
+  const invalidateBalance = useGetBalanceInvalidate({ address });
+  
+  return useMutation({
+    mutationKey: ['request-airdrop', { endpoint: connection.rpcEndpoint, address }],
+    mutationFn: async (amount: number = 1) => {
+      const signature = await connection.requestAirdrop(
+        address,
+        amount * LAMPORTS_PER_SOL
+      );
+      
+      await connection.confirmTransaction(signature, 'confirmed');
+      return signature;
+    },
+    onSuccess: async () => {
+      await invalidateBalance();
+    },
+  });
+}
+```
+
+<Note>
+Airdrops are only available on devnet and testnet networks. Mainnet does not support airdrops.
+</Note>
+
+## Receiving SOL
+
+To receive SOL or tokens, share your wallet address:
+
+### Receive screen features
+
+- **Address display**: Full public key with copy button
+- **QR code**: Scannable code containing your address
+- **Share button**: Share address via native share sheet
+- **Address format**: Both base58 and ellipsified versions
+
+### Getting your address
+
+The connected account's public key is accessible via `useWalletUi`:
+
+```typescript
+const { account } = useWalletUi();
+
+if (account) {
+  const address = account.publicKey.toString();
+  const shortAddress = ellipsify(address, 8);
+  
+  // Display: 7xKX...4J2p
+  // Full: 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU4J2p
+}
+```
+
+## Token management
+
+### Viewing token balances
+
+All SPL tokens are automatically detected and displayed:
+
+```typescript
+const { data: tokenAccounts, isLoading } = useGetTokenAccounts({ 
+  address: account.publicKey 
+});
+
+return (
+  <View>
+    {tokenAccounts?.map((account) => (
+      <TokenAccountItem 
+        key={account.pubkey.toString()}
+        account={account}
+      />
+    ))}
+  </View>
+);
+```
+
+### Token account structure
+
+Each token account contains:
+
+```typescript
+interface TokenAccount {
+  pubkey: PublicKey;          // Account address
+  account: {
+    data: {
+      parsed: {
+        info: {
+          mint: string;         // Token mint address
+          owner: string;        // Your wallet address
+          tokenAmount: {
+            amount: string;     // Raw amount
+            decimals: number;   // Token decimals
+            uiAmount: number;   // Formatted amount
+          };
+        };
+      };
+    };
+  };
+}
+```
+
+### Getting individual token balance
+
+Query a specific token's balance using `useGetTokenAccountBalance`:
+
+```typescript
+const { data: balance } = useQuery({
+  queryKey: ['get-token-account-balance', { endpoint, address: tokenAccountAddress }],
+  queryFn: async () => {
+    const response = await connection.getTokenAccountBalance(tokenAccountAddress);
+    return response.value;
+  },
+});
+```
+
+<Tabs>
+  <Tab title="Formatted display">
+    Use `uiAmount` for user-facing display:
+    ```typescript
+    const displayBalance = balance.uiAmount;
+    // Example: 100.50 USDC
+    ```
+  </Tab>
+  
+  <Tab title="Raw amount">
+    Use `amount` for calculations:
+    ```typescript
+    const rawAmount = BigInt(balance.amount);
+    // Example: 100500000 (for 6 decimals)
+    ```
+  </Tab>
+</Tabs>
+
+## Wallet authorization
+
+Synto Mobile uses the Mobile Wallet Adapter protocol for secure authorization:
+
+### Authorization lifecycle
+
+<Steps>
+  <Step title="Initial authorization">
+    First connection requests full authorization with the selected cluster (devnet/mainnet).
+  </Step>
+  
+  <Step title="Token persistence">
+    The auth token is saved to AsyncStorage for subsequent sessions.
+  </Step>
+  
+  <Step title="Reauthorization">
+    When performing operations, the app reauthorizes using the cached token if valid.
+  </Step>
+  
+  <Step title="Deauthorization">
+    Users can disconnect, which clears the auth token and closes the session.
+  </Step>
+</Steps>
+
+### Authorization hook
+
+The `useAuthorization` hook manages the authorization state:
+
+```typescript
+export function useAuthorization() {
+  const { selectedCluster } = useCluster();
+  const fetchQuery = useFetchAuthorization();
+  const persistMutation = usePersistAuthorization();
+  
+  const authorizeSession = useCallback(
+    async (wallet: AuthorizeAPI) => {
+      const authorizationResult = await wallet.authorize({
+        identity: { name: 'Synto Mobile', uri: 'https://synto.io' },
+        chain: selectedCluster.id,
+        auth_token: fetchQuery.data?.authToken,
+      });
+      return (await handleAuthorizationResult(authorizationResult)).selectedAccount;
+    },
+    [fetchQuery.data?.authToken, selectedCluster.id]
+  );
+  
+  const deauthorizeSessions = useCallback(async () => {
+    await invalidateAuthorizations();
+    await persistMutation.mutateAsync(null);
+  }, [invalidateAuthorizations, persistMutation]);
+  
+  return {
+    accounts: fetchQuery.data?.accounts ?? null,
+    authorizeSession,
+    deauthorizeSessions,
+    selectedAccount: fetchQuery.data?.selectedAccount ?? null,
+  };
+}
+```
+
+### Error handling
+
+Authorization errors trigger automatic disconnection:
+
+```typescript
+const handleWalletError = useCallback(async (error: any) => {
+  console.error('Wallet error:', error);
+  
+  const isAuthError = 
+    error?.message?.includes('authorization') ||
+    error?.message?.includes('not authorized') ||
+    error?.message?.includes('wallet not connected') ||
+    error?.code === 'UNAUTHORIZED';
+  
+  if (isAuthError) {
+    console.log('Auto-disconnect due to authorization error');
+    await deauthorizeSessions();
+  }
+  
+  throw error;
+}, [deauthorizeSessions]);
+```
+
+<Warning>
+If authorization expires or fails, the wallet automatically disconnects. Reconnect to continue using wallet features.
+</Warning>
+
+## Network selection
+
+Synto Mobile supports multiple Solana clusters:
+
+- **Mainnet Beta**: Production network with real SOL
+- **Devnet**: Testing network with free SOL via airdrops
+- **Testnet**: Alternative testing network
+- **Custom RPC**: Connect to custom endpoints
+
+The selected cluster affects:
+- Which blockchain data is read
+- Where transactions are submitted
+- Whether airdrops are available
+
+<Info>
+Always verify you're on the correct network before performing transactions. Mainnet transactions use real SOL and cannot be reversed.
+</Info>
+
+## Best practices
+
+<Steps>
+  <Step title="Verify addresses">
+    Always double-check recipient addresses before sending. Solana addresses are case-sensitive and must be valid base58 strings.
+  </Step>
+  
+  <Step title="Check balances">
+    Ensure sufficient SOL balance for transaction fees (rent + network fees).
+  </Step>
+  
+  <Step title="Use devnet for testing">
+    Test transactions on devnet before using mainnet to avoid mistakes with real funds.
+  </Step>
+  
+  <Step title="Keep auth tokens secure">
+    Auth tokens are stored in AsyncStorage. Don't share device access or clear app data unnecessarily.
+  </Step>
+  
+  <Step title="Monitor confirmations">
+    Wait for transaction confirmation before considering transfers complete. Use 'confirmed' or 'finalized' commitment levels.
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="AI chat interface" icon="comments" href="/features/ai-chat-interface">
+    Use natural language to execute wallet operations
+  </Card>
+  
+  <Card title="Mobile Wallet Adapter" icon="mobile-screen" href="/features/mobile-wallet-adapter">
+    Learn how transactions are signed securely
+  </Card>
+</CardGroup>

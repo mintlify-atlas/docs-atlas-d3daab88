@@ -1,0 +1,380 @@
+---
+title: DeFi operations
+description: Overview of decentralized finance features available in Synto Mobile
+---
+
+Synto Mobile provides seamless access to decentralized finance (DeFi) protocols on Solana, enabling you to swap tokens, stake assets, and access lending markets directly from your mobile device.
+
+## Available DeFi features
+
+Synto Mobile integrates with leading Solana DeFi protocols:
+
+<CardGroup cols={2}>
+  <Card title="Token swaps" icon="arrow-right-arrow-left" href="/guides/swapping-tokens">
+    Trade tokens instantly via Jupiter Exchange
+  </Card>
+  <Card title="Liquid staking" icon="layer-group" href="/guides/staking">
+    Stake SOL and receive jupSOL with Jupiter
+  </Card>
+  <Card title="Lending & borrowing" icon="hand-holding-dollar" href="/guides/lending">
+    Access loans and lend assets via RainFi
+  </Card>
+  <Card title="Price feeds" icon="chart-line">
+    Real-time token pricing from Jupiter API
+  </Card>
+</CardGroup>
+
+## DeFi plugin architecture
+
+Synto Mobile's DeFi capabilities are powered by a modular plugin system:
+
+```typescript
+const DefiPlugin = {
+  name: "defi",
+  
+  methods: {
+    quoteLoanCalculator,
+    RainfiTransactionBuilder,
+    GetUserLoans,
+    RepayLoan,
+  },
+  
+  actions: [
+    quoteLoanCalculatorAction,
+    rainfiTransactionBuilderAction,
+    rainfiGetUserLoansAction,
+    rainfiRepayLoanAction,
+  ],
+};
+```
+
+<Note>
+All DeFi operations are executed on-chain through smart contracts, ensuring trustless and transparent transactions.
+</Note>
+
+## Integrated protocols
+
+### Jupiter
+
+**Jupiter** is Solana's leading liquidity aggregator, providing:
+- Token swaps with best price execution
+- Liquid staking (jupSOL)
+- Limit orders and DCA strategies
+- Access to multiple DEXs through a single interface
+
+**Key features:**
+- Dynamic slippage management
+- Route optimization across DEXs
+- MEV protection
+- Referral fee support
+
+### RainFi
+
+**RainFi** is a decentralized lending protocol offering:
+- Instant loans with collateral
+- Competitive interest rates
+- Multiple currency support
+- Flexible loan durations
+
+**Key features:**
+- Classic loan products
+- Automated interest calculations
+- Pool-based liquidity
+- Loan repayment flexibility
+
+<Tip>
+Use the AI agent to interact with DeFi protocols using natural language commands - no need to memorize complex commands.
+</Tip>
+
+## AI-powered DeFi interactions
+
+Synto Mobile's AI agent enables natural language DeFi operations:
+
+<CodeGroup>
+
+```bash Swap tokens
+"Swap 1 SOL for USDC"
+"Exchange 100 USDC to SOL with 1% slippage"
+"Convert tokens"
+```
+
+```bash Staking
+"Stake 5 SOL with Jupiter"
+"Get jupSOL"
+"Liquid stake my SOL"
+```
+
+```bash Lending
+"Get loan quote for 1000 USDC"
+"Show my active loans"
+"Repay loan"
+```
+
+</CodeGroup>
+
+## Transaction workflow
+
+All DeFi operations follow a consistent workflow:
+
+<Steps>
+  <Step title="Initiate operation">
+    Use the AI agent or UI to start a DeFi operation (swap, stake, borrow, etc.).
+  </Step>
+  
+  <Step title="Get quote/simulation">
+    The app fetches current rates, fees, and simulates the transaction outcome.
+  </Step>
+  
+  <Step title="Review details">
+    Review the transaction details including:
+    - Input and output amounts
+    - Fees and slippage
+    - Expected outcomes
+    - Network fees
+  </Step>
+  
+  <Step title="Sign and execute">
+    Approve the transaction with your wallet, and it's submitted to the blockchain.
+  </Step>
+  
+  <Step title="Confirmation">
+    Wait for blockchain confirmation and receive your assets.
+  </Step>
+</Steps>
+
+## Transaction options
+
+All DeFi transactions support advanced options:
+
+```typescript
+interface TransactionOptions {
+  prioritizationFeeLamports: string;  // "fast", "medium", "slow"
+  maxFeeCapLamports?: number;         // Maximum fee willing to pay
+  jitoTipLamports?: number;           // Optional Jito MEV tip
+}
+```
+
+### Priority levels
+
+| Level | Description | Use case |
+|-------|-------------|----------|
+| `slow` | Lower priority fee | Non-urgent transactions |
+| `medium` | Standard priority | Most transactions |
+| `fast` | Higher priority fee | Time-sensitive trades |
+
+<Warning>
+Higher priority levels cost more SOL but get your transaction confirmed faster. Choose based on urgency and network conditions.
+</Warning>
+
+## Slippage protection
+
+**Slippage** is the difference between expected and actual execution price.
+
+### Understanding slippage
+
+- **Low slippage (0.1-0.5%)**: Better price but may fail in volatile markets
+- **Medium slippage (0.5-1%)**: Balanced approach for most trades
+- **High slippage (1-3%)**: More likely to succeed but potentially worse price
+
+```typescript
+// Slippage in basis points (BPS)
+// 50 BPS = 0.5%
+// 100 BPS = 1%
+// 300 BPS = 3%
+slippageBps: 100  // 1% slippage tolerance
+```
+
+<Tip>
+For large trades or low-liquidity tokens, use higher slippage to avoid transaction failures. For stablecoins, use minimal slippage.
+</Tip>
+
+## Fee structure
+
+### Network fees
+
+All transactions require SOL for network fees:
+- **Base transaction fee**: ~0.000005 SOL
+- **Priority fee**: Variable based on network congestion
+- **Account rent**: Required for new token accounts (~0.00203928 SOL)
+
+### Protocol fees
+
+#### Jupiter fees
+- Platform fee: Configurable (default: 0%)
+- Referral fees: Optional
+- No additional swap fees
+
+#### RainFi fees
+- Rain protocol fees: Included in loan simulation
+- Interest rates: Dynamic based on pool conditions
+- No prepayment penalties
+
+<Note>
+All fees are displayed before transaction confirmation. Review carefully before proceeding.
+</Note>
+
+## Security considerations
+
+<AccordionGroup>
+  <Accordion title="Smart contract risk">
+    DeFi protocols involve smart contract interactions. While Jupiter and RainFi are audited protocols, always:
+    - Start with small amounts
+    - Understand the protocol mechanics
+    - Monitor your positions
+    - Keep track of expiry dates (for loans)
+  </Accordion>
+  
+  <Accordion title="Price volatility">
+    Crypto prices can change rapidly:
+    - Use appropriate slippage settings
+    - Monitor large transactions closely
+    - Consider market conditions
+    - Be aware of impermanent loss concepts
+  </Accordion>
+  
+  <Accordion title="Transaction failures">
+    DeFi transactions can fail due to:
+    - Insufficient slippage tolerance
+    - Price changes during execution
+    - Network congestion
+    - Insufficient SOL for fees
+    
+    **Failed transactions still consume network fees.**
+  </Accordion>
+</AccordionGroup>
+
+## Best practices
+
+### Before trading
+
+- ✅ Check current token prices
+- ✅ Verify you have sufficient SOL for fees
+- ✅ Understand slippage impact
+- ✅ Review transaction details carefully
+- ✅ Start with small amounts when learning
+
+### During trading
+
+- ✅ Monitor transaction status
+- ✅ Don't close app during pending transactions
+- ✅ Save transaction signatures for reference
+- ✅ Verify received amounts
+
+### After trading
+
+- ✅ Confirm new token balances
+- ✅ Monitor staked positions
+- ✅ Track loan expiration dates
+- ✅ Close unused token accounts
+
+## Advanced features
+
+### Dynamic slippage
+
+Jupiter swaps use dynamic slippage management:
+
+```typescript
+// Auto-adjusts slippage based on:
+// - Pool liquidity
+// - Market volatility
+// - Trade size
+dynamicSlippage: true
+minimizeSlippage: false
+```
+
+### Route optimization
+
+Jupiter automatically finds the best swap route:
+- Checks multiple DEXs
+- Considers split routes
+- Optimizes for best price
+- Minimizes price impact
+
+### Compute unit limits
+
+```typescript
+// Automatically calculate required compute units
+dynamicComputeUnitLimit: true
+```
+
+This ensures transactions have sufficient compute budget without overpaying.
+
+## Monitoring DeFi positions
+
+### Active loans
+
+Check your active RainFi loans:
+
+```bash
+"Show my active loans"
+"Get user loans"
+```
+
+Response includes:
+- Borrowed amount
+- Collateral amount
+- Interest rate
+- Expiration date
+- Liquidation threshold
+
+### Token balances
+
+Monitor all your token holdings:
+
+```bash
+"Show my token balances"
+"What tokens do I have?"
+```
+
+<Tip>
+Regularly monitor your DeFi positions, especially loans with expiration dates to avoid liquidation.
+</Tip>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Swap failed">
+    Common causes:
+    - Slippage too low for current market
+    - Insufficient SOL for fees
+    - Token account doesn't exist
+    - Price moved significantly
+    
+    **Solution**: Increase slippage or try again with current prices.
+  </Accordion>
+  
+  <Accordion title="Loan transaction failed">
+    Possible issues:
+    - Insufficient collateral
+    - Pool liquidity unavailable
+    - Authorization expired
+    - Network congestion
+    
+    **Solution**: Get a fresh loan quote and try again.
+  </Accordion>
+  
+  <Accordion title="Transaction pending too long">
+    If transaction is pending:
+    1. Check network status
+    2. Verify on Solana explorer
+    3. Increase priority fee if stuck
+    4. Wait for timeout (transactions expire after ~2 minutes)
+  </Accordion>
+</AccordionGroup>
+
+## Related resources
+
+<CardGroup cols={2}>
+  <Card title="Swapping tokens" icon="arrow-right-arrow-left" href="/guides/swapping-tokens">
+    Detailed guide for token swaps
+  </Card>
+  <Card title="Staking" icon="layer-group" href="/guides/staking">
+    Learn about liquid staking with Jupiter
+  </Card>
+  <Card title="Lending" icon="hand-holding-dollar" href="/guides/lending">
+    Guide to RainFi lending and borrowing
+  </Card>
+  <Card title="Token operations" icon="coins" href="/guides/token-operations">
+    Basic token management guide
+  </Card>
+</CardGroup>

@@ -1,0 +1,462 @@
+---
+title: Installation
+description: Detailed installation instructions for Synto Mobile on Android, iOS, and development environments
+---
+
+## System requirements
+
+Before installing Synto Mobile, ensure your device meets these requirements:
+
+<Tabs>
+  <Tab title="Android">
+    - Android 5.0 (Lollipop) or higher
+    - At least 100MB of free storage
+    - A Solana-compatible mobile wallet (Phantom, Solflare, etc.)
+  </Tab>
+  
+  <Tab title="iOS">
+    - iOS 13.0 or higher
+    - At least 100MB of free storage
+    - A Solana-compatible mobile wallet
+    - Currently requires Expo Go for development builds
+  </Tab>
+  
+  <Tab title="Development">
+    - Node.js 18 or higher
+    - npm or bun package manager
+    - Expo CLI
+    - Android Studio (for Android development) or Xcode (for iOS)
+  </Tab>
+</Tabs>
+
+## Installing on Android
+
+<Steps>
+  <Step title="Download the APK">
+    Get the latest release from the [GitHub releases page](https://github.com/juiiceee/synto-mobile/releases):
+    
+    1. Navigate to the latest release
+    2. Download the `.apk` file to your Android device
+    3. Wait for the download to complete
+    
+    <Tip>
+      You can also download directly to your computer and transfer via USB.
+    </Tip>
+  </Step>
+  
+  <Step title="Enable installation from unknown sources">
+    Android requires permission to install apps outside the Play Store:
+    
+    1. Open **Settings** on your device
+    2. Navigate to **Security** or **Privacy**
+    3. Find **Install unknown apps** or **Unknown sources**
+    4. Select your browser or file manager
+    5. Toggle **Allow from this source**
+    
+    <Warning>
+      Only enable this for trusted apps. Remember to disable it after installation for security.
+    </Warning>
+  </Step>
+  
+  <Step title="Install the APK">
+    1. Open your device's **Downloads** folder or file manager
+    2. Tap the downloaded `synto-mobile.apk` file
+    3. Review the permissions requested
+    4. Tap **Install**
+    5. Wait for installation to complete
+    6. Tap **Open** or find Synto Mobile in your app drawer
+  </Step>
+  
+  <Step title="Install a Solana wallet">
+    If you don't have a Solana wallet yet:
+    
+    <CardGroup cols={2}>
+      <Card title="Phantom Mobile" icon="ghost" href="https://phantom.app/">
+        Popular and user-friendly Solana wallet with mobile support.
+      </Card>
+      <Card title="Solflare" icon="sun" href="https://solflare.com/">
+        Full-featured Solana wallet with hardware wallet support.
+      </Card>
+    </CardGroup>
+    
+    Install one of these from the Google Play Store before proceeding.
+  </Step>
+</Steps>
+
+## Installing on iOS
+
+<Note>
+  **iOS distribution**: Synto Mobile is currently in development. iOS users can run the app using Expo Go while we prepare App Store distribution.
+</Note>
+
+### Using Expo Go (Recommended for iOS)
+
+<Steps>
+  <Step title="Install Expo Go">
+    Download Expo Go from the App Store:
+    
+    1. Open the **App Store** on your iOS device
+    2. Search for "Expo Go"
+    3. Tap **Get** to install
+    4. Open the app once installed
+  </Step>
+  
+  <Step title="Get the development build">
+    You have two options:
+    
+    **Option A: Use a hosted build**
+    - Contact the development team for a QR code
+    - Scan the QR code with your camera app
+    - Tap the notification to open in Expo Go
+    
+    **Option B: Run locally**
+    - Clone the repository on your computer
+    - Run `npm install && npx expo start`
+    - Scan the QR code displayed in terminal
+  </Step>
+  
+  <Step title="Install a Solana wallet">
+    Install a compatible Solana wallet:
+    
+    - [Phantom](https://phantom.app/) - Available on App Store
+    - [Solflare](https://solflare.com/) - Full-featured wallet
+    - [Glow](https://glow.app/) - Simple and secure
+  </Step>
+</Steps>
+
+### TestFlight (Coming Soon)
+
+<Note>
+  We're working on TestFlight distribution for easier iOS installation. Join our community to get notified when it's available!
+</Note>
+
+## Development setup
+
+For developers who want to build from source or contribute to Synto Mobile:
+
+### Prerequisites
+
+Install the required development tools:
+
+<CodeGroup>
+```bash Node.js
+# Install Node.js 18 or higher
+# Visit https://nodejs.org/ to download
+
+# Verify installation
+node --version  # Should be v18.0.0 or higher
+npm --version
+```
+
+```bash Expo CLI
+# Install Expo CLI globally
+npm install -g expo-cli
+
+# Verify installation
+expo --version
+```
+
+```bash Android Studio (Optional)
+# For Android development
+# Download from https://developer.android.com/studio
+
+# Install Android SDK and emulator
+# Configure ANDROID_HOME environment variable
+```
+</CodeGroup>
+
+### Clone and install
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/juiiceee/synto-mobile.git
+    cd synto-mobile
+    ```
+  </Step>
+  
+  <Step title="Install dependencies">
+    Using npm:
+    ```bash
+    npm install
+    ```
+    
+    Or using bun for faster installation:
+    ```bash
+    bun install
+    ```
+    
+    <Tip>
+      Installation takes 2-3 minutes on first run. Subsequent installs are faster.
+    </Tip>
+  </Step>
+  
+  <Step title="Configure environment">
+    Create a `.env` file in the root directory:
+    
+    ```bash .env
+    # Backend API configuration
+    EXPO_PUBLIC_BACKEND_URL=your_backend_url
+    EXPO_PUBLIC_BACKEND_KEY=your_api_key
+    
+    # Optional: Solana RPC endpoint
+    EXPO_PUBLIC_RPC_URL=https://api.mainnet-beta.solana.com
+    ```
+    
+    <Warning>
+      Never commit your `.env` file to version control. It's already in `.gitignore`.
+    </Warning>
+  </Step>
+  
+  <Step title="Start the development server">
+    ```bash
+    npx expo start
+    ```
+    
+    This will start the Expo development server and display a QR code.
+  </Step>
+</Steps>
+
+### Running on devices
+
+<Tabs>
+  <Tab title="Android Device">
+    **Physical device**:
+    1. Enable developer mode on your Android device
+    2. Enable USB debugging in developer options
+    3. Connect via USB
+    4. Run: `npx expo run:android`
+    
+    **Emulator**:
+    1. Start Android Studio
+    2. Open AVD Manager
+    3. Launch an emulator
+    4. Run: `npx expo run:android`
+    
+    **Expo Go**:
+    1. Install Expo Go from Play Store
+    2. Scan the QR code from terminal
+    3. App will load in Expo Go
+  </Tab>
+  
+  <Tab title="iOS Device">
+    **Physical device**:
+    1. Install Expo Go from App Store
+    2. Scan the QR code with Camera app
+    3. Tap notification to open in Expo Go
+    
+    **Simulator** (macOS only):
+    1. Install Xcode from App Store
+    2. Run: `npx expo run:ios`
+    3. Simulator will launch automatically
+    
+    <Note>
+      Building native iOS apps requires macOS and Xcode. Windows/Linux users should use Expo Go or EAS Build.
+    </Note>
+  </Tab>
+  
+  <Tab title="Web Browser">
+    Run Synto Mobile in a web browser for quick testing:
+    
+    ```bash
+    npx expo start --web
+    ```
+    
+    Opens at `http://localhost:19006`
+    
+    <Warning>
+      Mobile Wallet Adapter features don't work in web browsers. Use a mobile device for full functionality.
+    </Warning>
+  </Tab>
+</Tabs>
+
+### Building for production
+
+Create production builds for distribution:
+
+<CodeGroup>
+```bash Android APK
+# Prebuild native Android project
+npm run android:build
+
+# Build APK
+cd android
+./gradlew assembleRelease
+
+# APK location:
+# android/app/build/outputs/apk/release/app-release.apk
+```
+
+```bash EAS Build (Recommended)
+# Install EAS CLI
+npm install -g eas-cli
+
+# Configure EAS
+eas build:configure
+
+# Build for Android
+eas build --platform android
+
+# Build for iOS
+eas build --platform ios
+```
+</CodeGroup>
+
+<Tip>
+  EAS Build is recommended for production builds. It handles code signing, provisioning, and app store distribution automatically.
+</Tip>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion icon="triangle-exclamation" title="Installation fails on Android">
+    **Problem**: APK won't install or shows error
+    
+    **Solutions**:
+    - Ensure you've enabled installation from unknown sources
+    - Check that you have enough storage space (100MB+)
+    - Try uninstalling previous version first
+    - Verify APK is not corrupted by re-downloading
+    - Check Android version is 5.0 or higher
+  </Accordion>
+  
+  <Accordion icon="link-slash" title="Wallet connection fails">
+    **Problem**: Can't connect to Solana wallet
+    
+    **Solutions**:
+    - Ensure you have a compatible wallet installed
+    - Update your wallet app to the latest version
+    - Try connecting with a different wallet
+    - Check that Mobile Wallet Adapter is supported
+    - Restart both Synto and your wallet app
+  </Accordion>
+  
+  <Accordion icon="code" title="Development server won't start">
+    **Problem**: `expo start` fails or shows errors
+    
+    **Solutions**:
+    ```bash
+    # Clear cache and reinstall
+    rm -rf node_modules
+    npm install
+    npx expo start --clear
+    
+    # Update Expo
+    npm install expo@latest
+    
+    # Check Node version
+    node --version  # Should be 18+
+    ```
+  </Accordion>
+  
+  <Accordion icon="mobile" title="QR code won't scan">
+    **Problem**: Expo Go can't scan QR code
+    
+    **Solutions**:
+    - Ensure phone and computer are on same WiFi network
+    - Try using tunnel mode: `npx expo start --tunnel`
+    - Manually enter URL shown in terminal
+    - Check firewall isn't blocking port 19000
+    - Try scanning with QR code reader first
+  </Accordion>
+  
+  <Accordion icon="hammer" title="Build errors during development">
+    **Problem**: TypeScript or build errors
+    
+    **Solutions**:
+    ```bash
+    # Run type checking
+    npm run build
+    
+    # Run linter
+    npm run lint
+    
+    # Format code
+    npm run fmt
+    
+    # Prebuild native projects
+    npm run android:build
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Package information
+
+Synto Mobile uses these key dependencies:
+
+<CodeGroup>
+```json Core packages
+{
+  "expo": "~53.0.16",
+  "react-native": "0.79.5",
+  "expo-router": "~5.1.0"
+}
+```
+
+```json Solana integration
+{
+  "@solana/web3.js": "^1.98.2",
+  "@solana/spl-token": "^0.4.13",
+  "@solana-mobile/mobile-wallet-adapter-protocol": "^2.2.2",
+  "@solana-mobile/mobile-wallet-adapter-protocol-web3js": "^2.2.2"
+}
+```
+
+```json AI capabilities
+{
+  "ai": "^4.3.19",
+  "@ai-sdk/openai": "^1.3.23",
+  "langchain": "^0.3.30"
+}
+```
+
+```json State & UI
+{
+  "@tanstack/react-query": "^5.80.6",
+  "react-native-reanimated": "~3.17.4",
+  "@react-native-async-storage/async-storage": "^2.1.2"
+}
+```
+</CodeGroup>
+
+## Next steps
+
+Now that Synto Mobile is installed:
+
+<CardGroup cols={2}>
+  <Card
+    title="Quick start guide"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Connect your wallet and send your first AI message.
+  </Card>
+  
+  <Card
+    title="AI capabilities"
+    icon="brain"
+    href="/ai-agent/capabilities"
+  >
+    Discover everything you can do with Synto's AI agent.
+  </Card>
+  
+  <Card
+    title="Development guide"
+    icon="code"
+    href="/development/architecture"
+  >
+    Learn about the app architecture and start contributing.
+  </Card>
+  
+  <Card
+    title="Wallet operations"
+    icon="wallet"
+    href="/features/wallet-operations"
+  >
+    Master sending, receiving, and managing your crypto.
+  </Card>
+</CardGroup>
+
+<Note>
+  **Need help?** Join our [GitHub Discussions](https://github.com/juiiceee/synto-mobile/discussions) or open an issue if you encounter problems.
+</Note>

@@ -1,0 +1,713 @@
+---
+title: Component structure
+description: Understanding the component organization and design patterns in Synto Mobile
+---
+
+## Overview
+
+Synto Mobile components are organized by feature domain, with each directory containing related UI and logic components. The architecture promotes reusability, separation of concerns, and type safety.
+
+## Component organization
+
+Components are grouped into feature-based directories:
+
+```bash
+components/
+├── account/          # Wallet balance and token management
+├── auth/             # Authentication and authorization
+├── chat/             # Chat interface components
+├── cluster/          # Solana network selection
+├── demo/             # Example features
+├── settings/         # App configuration
+├── solana/           # Wallet adapter integration
+└── ui/               # Reusable UI primitives
+```
+
+## Core components
+
+### App-level components
+
+These components provide foundational app functionality:
+
+<AccordionGroup>
+  <Accordion title="AppProviders">
+    Wraps the entire app with necessary context providers.
+    
+    **Location:** `components/app-providers.tsx`
+    
+    ```tsx
+    export function AppProviders({ children }: PropsWithChildren) {
+      return (
+        <AppTheme>
+          <QueryClientProvider client={queryClient}>
+            <ClusterProvider>
+              <SolanaProvider>
+                <AuthProvider>{children}</AuthProvider>
+              </SolanaProvider>
+            </ClusterProvider>
+          </QueryClientProvider>
+        </AppTheme>
+      );
+    }
+    ```
+    
+    **Responsibilities:**
+    - Theme configuration
+    - Query client setup
+    - Network selection
+    - Solana connection
+    - Authentication state
+  </Accordion>
+  
+  <Accordion title="AppTheme">
+    Manages light/dark theme switching using React Navigation themes.
+    
+    **Location:** `components/app-theme.tsx`
+    
+    ```tsx
+    export function AppTheme({ children }: PropsWithChildren) {
+      const { theme } = useAppTheme();
+      return <ThemeProvider value={theme}>{children}</ThemeProvider>;
+    }
+    
+    export function useAppTheme() {
+      const colorScheme = useColorScheme();
+      const isDark = colorScheme === "dark";
+      const theme = isDark ? AppThemeDark : AppThemeLight;
+      return { colorScheme, isDark, theme };
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="AppPage">
+    Standard page container with consistent layout.
+    
+    **Location:** `components/app-page.tsx`
+    
+    Provides padding, safe area handling, and scrollable content areas.
+  </Accordion>
+  
+  <Accordion title="AppText, AppView">
+    Themed text and view components.
+    
+    **Location:** `components/app-text.tsx`, `components/app-view.tsx`
+    
+    Apply theme colors automatically based on the current color scheme.
+  </Accordion>
+</AccordionGroup>
+
+## Authentication components
+
+### AuthProvider
+
+Manages authentication state and wallet connection lifecycle.
+
+**Location:** `components/auth/auth-provider.tsx`
+
+```tsx
+export interface AuthState {
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  hasCompletedOnboarding: boolean;
+  signIn: () => Promise<Account>;
+  signOut: () => Promise<void>;
+  markOnboardingComplete: () => Promise<void>;
+  checkAuthAndRedirect: () => void;
+}
+
+export function useAuth() {
+  return use(Context);
+}
+```
+
+<Tabs>
+  <Tab title="Usage">
+    ```tsx
+    function MyScreen() {
+      const { isAuthenticated, signIn, signOut } = useAuth();
+      
+      if (!isAuthenticated) {
+        return <Button onPress={signIn}>Connect Wallet</Button>;
+      }
+      
+      return <Button onPress={signOut}>Disconnect</Button>;
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Implementation">
+    ```tsx
+    export function AuthProvider({ children }: PropsWithChildren) {
+      const { disconnect } = useMobileWallet();
+      const { accounts, isLoading } = useAuthorization();
+      const signInMutation = useSignInMutation();
+      const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+      
+      const isAuthenticated = (accounts?.length ?? 0) > 0;
+      
+      // Auto-redirect based on auth state
+      const checkAuthAndRedirect = useCallback(() => {
+        if (!isAuthenticated && !isLoading) {
+          if (!hasCompletedOnboarding) {
+            router.replace("/onboarding");
+          } else {
+            router.replace("/sign-in");
+          }
+        }
+      }, [isAuthenticated, isLoading, hasCompletedOnboarding]);
+      
+      // ... rest of implementation
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+The AuthProvider automatically handles redirects based on authentication status and onboarding completion.
+</Note>
+
+## Solana components
+
+These components handle blockchain interactions and wallet management.
+
+### SolanaProvider
+
+Creates and manages the Solana RPC connection.
+
+**Location:** `components/solana/solana-provider.tsx`
+
+```tsx
+export function SolanaProvider({ children, config }: SolanaProviderProps) {
+  const { selectedCluster } = useCluster();
+  const connection = useMemo(
+    () => new Connection(selectedCluster.endpoint, config),
+    [selectedCluster, config]
+  );
+  
+  return (
+    <ConnectionContext.Provider value={{ connection }}>
+      {children}
+    </ConnectionContext.Provider>
+  );
+}
+
+export function useConnection(): Connection {
+  return useSolana().connection;
+}
+```
+
+<Warning>
+The connection is recreated whenever the selected cluster changes. Use `useConnection()` hook to access the current connection instance.
+</Warning>
+
+### Mobile Wallet hooks
+
+<AccordionGroup>
+  <Accordion title="useMobileWallet">
+    Core wallet interaction hook.
+    
+    **Location:** `components/solana/use-mobile-wallet.tsx`
+    
+    ```tsx
+    export function useMobileWallet() {
+      const { authorizeSession, deauthorizeSessions } = useAuthorization();
+      
+      const signAndSendTransaction = useCallback(
+        async (transaction: Transaction | VersionedTransaction) => {
+          return await transact(async (wallet) => {
+            await authorizeSession(wallet);
+            const signatures = await wallet.signAndSendTransactions({
+              transactions: [transaction],
+            });
+            return signatures[0];
+          });
+        },
+        [authorizeSession]
+      );
+      
+      return {
+        connect,
+        signIn,
+        disconnect,
+        signAndSendTransaction,
+        signMessage,
+        signTransactions,
+      };
+    }
+    ```
+    
+    **Features:**
+    - Automatic error handling and recovery
+    - Session management
+    - Transaction signing and sending
+    - Message signing
+  </Accordion>
+  
+  <Accordion title="useWalletUi">
+    UI-focused wallet hook with connection state.
+    
+    **Location:** `components/solana/use-wallet-ui.tsx`
+    
+    Provides the current connected account and UI helper methods.
+  </Accordion>
+  
+  <Accordion title="useAuthorization">
+    Low-level authorization hook.
+    
+    **Location:** `components/solana/use-authorization.tsx`
+    
+    Manages wallet authorization sessions and account state.
+  </Accordion>
+</AccordionGroup>
+
+### Wallet UI components
+
+<CardGroup cols={2}>
+  <Card title="WalletUiButtonConnect" icon="link">
+    Connect wallet button with loading states
+  </Card>
+  <Card title="WalletUiButtonDisconnect" icon="link-slash">
+    Disconnect wallet button
+  </Card>
+  <Card title="WalletUiDropdown" icon="bars">
+    Wallet menu with account info and actions
+  </Card>
+  <Card title="BaseButton" icon="square">
+    Themed button component used across wallet UI
+  </Card>
+</CardGroup>
+
+## Account components
+
+Components for displaying and managing wallet balances and tokens.
+
+### AccountFeature
+
+Main account dashboard component.
+
+**Location:** `components/account/account-feature.tsx`
+
+```tsx
+export function AccountFeature() {
+  const { account } = useWalletUi();
+  const [refreshing, setRefreshing] = useState(false);
+  
+  const invalidateBalance = useGetBalanceInvalidate({ 
+    address: account?.publicKey 
+  });
+  const invalidateTokenAccounts = useGetTokenAccountsInvalidate({ 
+    address: account?.publicKey 
+  });
+  
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([invalidateBalance(), invalidateTokenAccounts()]);
+    setRefreshing(false);
+  }, [invalidateBalance, invalidateTokenAccounts]);
+  
+  return (
+    <AppPage>
+      {account ? (
+        <ScrollView refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }>
+          <AccountUiBalance address={account.publicKey} />
+          <AccountUiButtons />
+          <AccountUiTokenAccounts address={account.publicKey} />
+        </ScrollView>
+      ) : (
+        <WalletUiButtonConnect />
+      )}
+    </AppPage>
+  );
+}
+```
+
+### Account sub-components
+
+<Tabs>
+  <Tab title="Balance Display">
+    **AccountUiBalance** - Shows SOL balance with formatting
+    
+    **Location:** `components/account/account-ui-balance.tsx`
+    
+    Uses `useGetBalance` hook to fetch and display balance.
+  </Tab>
+  
+  <Tab title="Token Accounts">
+    **AccountUiTokenAccounts** - Lists all token holdings
+    
+    **Location:** `components/account/account-ui-token-accounts.tsx`
+    
+    Displays SPL token balances using `useGetTokenAccounts` hook.
+  </Tab>
+  
+  <Tab title="Action Buttons">
+    **AccountUiButtons** - Send, Receive, Airdrop actions
+    
+    **Location:** `components/account/account-ui-buttons.tsx`
+    
+    Navigation to send/receive flows and airdrop requests.
+  </Tab>
+</Tabs>
+
+### Account action hooks
+
+These hooks provide account-related functionality:
+
+<CodeGroup>
+```tsx use-get-balance.tsx
+export function useGetBalance({ address }: { address: PublicKey }) {
+  const connection = useConnection();
+  const queryKey = useGetBalanceQueryKey({ 
+    address, 
+    endpoint: connection.rpcEndpoint 
+  });
+  
+  return useQuery({
+    queryKey,
+    queryFn: () => connection.getBalance(address),
+  });
+}
+
+export function useGetBalanceInvalidate({ address }: { address: PublicKey }) {
+  const connection = useConnection();
+  const queryKey = useGetBalanceQueryKey({ address, endpoint: connection.rpcEndpoint });
+  const client = useQueryClient();
+  
+  return () => client.invalidateQueries({ queryKey });
+}
+```
+
+```tsx use-transfer-sol.tsx
+export function useTransferSol({ address }: { address: PublicKey }) {
+  const connection = useConnection();
+  const transact = useTransact();
+  const invalidateBalance = useGetBalanceInvalidate({ address });
+  
+  return useMutation({
+    mutationFn: async ({ destination, amount }) => {
+      // Create and send transfer transaction
+    },
+    onSuccess: () => invalidateBalance(),
+  });
+}
+```
+
+```tsx use-request-airdrop.tsx
+export function useRequestAirdrop({ address }: { address: PublicKey }) {
+  const connection = useConnection();
+  const invalidateBalance = useGetBalanceInvalidate({ address });
+  
+  return useMutation({
+    mutationFn: async (amount: number) => {
+      const signature = await connection.requestAirdrop(
+        address,
+        amount * LAMPORTS_PER_SOL
+      );
+      return await connection.confirmTransaction(signature);
+    },
+    onSuccess: () => invalidateBalance(),
+  });
+}
+```
+</CodeGroup>
+
+## Chat components
+
+The chat interface consists of several interconnected components:
+
+### Component hierarchy
+
+```
+ChatScreen (app/(tabs)/chat/index.tsx)
+├── ChatHeader
+├── ChatList (when messages exist)
+│   └── ChatMessage (for each message)
+│       └── ToolManager (for tool invocations)
+├── SuggestionCards (when no messages)
+├── ChatInput
+└── HistoryOverlay (when visible)
+```
+
+### ChatHeader
+
+**Location:** `components/chat/chat-header.tsx`
+
+Provides navigation and chat management controls.
+
+```tsx
+interface ChatHeaderProps {
+  onHistoryPress: () => void;
+  onNewChatPress: () => void;
+  chatTitle?: string;
+}
+
+export function ChatHeader({ 
+  onHistoryPress, 
+  onNewChatPress, 
+  chatTitle 
+}: ChatHeaderProps) {
+  // Renders title, history button, new chat button
+}
+```
+
+### ChatInput
+
+**Location:** `components/chat/chat-input.tsx`
+
+```tsx
+interface ChatInputProps {
+  value: string;
+  onChangeText: (text: string) => void;
+  onSubmit: () => void;
+  isLoading: boolean;
+}
+
+export function ChatInput({ 
+  value, 
+  onChangeText, 
+  onSubmit, 
+  isLoading 
+}: ChatInputProps) {
+  return (
+    <Animated.View entering={FadeInDown.delay(400).duration(600)}>
+      <View style={styles.container}>
+        <TouchableOpacity>
+          <UiIconSymbol name="plus" />
+        </TouchableOpacity>
+        
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          multiline
+          placeholder="Ask anything"
+        />
+        
+        <TouchableOpacity onPress={onSubmit} disabled={isLoading}>
+          <UiIconSymbol name="waveform" />
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
+  );
+}
+```
+
+<Note>
+The chat input uses `react-native-reanimated` for smooth enter animations.
+</Note>
+
+### ChatMessage & ToolManager
+
+**Location:** `components/chat/chat-message.tsx`, `components/chat/tool-manager.tsx`
+
+Renders individual messages with support for tool invocations.
+
+```tsx
+interface ChatMessageProps {
+  message: Message;
+  addToolResult?: (args: any) => void;
+}
+
+export function ChatMessage({ message, addToolResult }: ChatMessageProps) {
+  return (
+    <View>
+      <Text>{message.content}</Text>
+      
+      {message.toolInvocations?.map((tool) => (
+        <ToolManager
+          key={tool.toolCallId}
+          toolInvocation={tool}
+          addToolResult={addToolResult}
+        />
+      ))}
+    </View>
+  );
+}
+```
+
+### SuggestionCards
+
+**Location:** `components/chat/suggestion-cards.tsx`
+
+Displays suggested prompts when starting a new chat.
+
+```tsx
+interface SuggestionCardsProps {
+  onSuggestionPress: (suggestion: string) => void;
+}
+
+export function SuggestionCards({ onSuggestionPress }: SuggestionCardsProps) {
+  const suggestions = [
+    "Check my SOL balance",
+    "Show my tokens",
+    "Get current TPS",
+    "Request airdrop",
+  ];
+  
+  return (
+    <View>
+      {suggestions.map((suggestion) => (
+        <TouchableOpacity onPress={() => onSuggestionPress(suggestion)}>
+          <Text>{suggestion}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+```
+
+### HistoryOverlay
+
+**Location:** `components/chat/history-overlay.tsx`
+
+Modal overlay for viewing and managing chat history.
+
+```tsx
+interface HistoryOverlayProps {
+  visible: boolean;
+  onClose: () => void;
+  onSelectConversation: (id: string) => void;
+  onNewChat: () => void;
+  onDeleteChat: (id: string) => void;
+  conversations: ChatMetadata[];
+  currentChatId: string | null;
+}
+```
+
+## Cluster components
+
+Manage Solana network selection and information.
+
+### ClusterProvider
+
+**Location:** `components/cluster/cluster-provider.tsx`
+
+```tsx
+export interface ClusterProviderContext {
+  selectedCluster: Cluster;
+  clusters: Cluster[];
+  setSelectedCluster: (cluster: Cluster) => void;
+  getExplorerUrl(path: string): string;
+}
+
+export function useCluster() {
+  return useContext(Context);
+}
+```
+
+### Cluster UI components
+
+<CardGroup cols={2}>
+  <Card title="ClusterUiVersion" icon="code-branch">
+    Displays the current cluster's RPC version
+  </Card>
+  <Card title="ClusterUiGenesisHash" icon="fingerprint">
+    Shows the genesis hash of the selected cluster
+  </Card>
+</CardGroup>
+
+## UI components
+
+Reusable UI primitives used throughout the app.
+
+### UiIconSymbol
+
+**Location:** `components/ui/ui-icon-symbol.tsx`
+
+Cross-platform icon component using SF Symbols on iOS and fallback icons on other platforms.
+
+```tsx
+interface UiIconSymbolProps {
+  name: string;
+  size?: number;
+  color?: string;
+  weight?: 'ultraLight' | 'thin' | 'light' | 'regular' | 'medium' | 'semibold' | 'bold';
+}
+
+export function UiIconSymbol({ 
+  name, 
+  size = 24, 
+  color, 
+  weight = 'regular' 
+}: UiIconSymbolProps) {
+  // iOS: Uses expo-symbols for SF Symbols
+  // Android/Web: Uses @expo/vector-icons fallback
+}
+```
+
+## Component patterns
+
+### Separation of concerns
+
+Components follow a clear separation:
+
+<Steps>
+  <Step title="Feature components">
+    High-level components that coordinate multiple sub-components (e.g., `AccountFeature`, `ChatScreen`)
+  </Step>
+  
+  <Step title="UI components">
+    Presentational components focused on rendering (e.g., `AccountUiBalance`, `ChatMessage`)
+  </Step>
+  
+  <Step title="Hook components">
+    Logic-only hooks that return data and actions (e.g., `useGetBalance`, `useMultiChat`)
+  </Step>
+</Steps>
+
+### Error boundaries
+
+<Warning>
+The app currently doesn't implement error boundaries. Consider adding them for production:
+
+```tsx
+import { ErrorBoundary } from 'react-error-boundary';
+
+function ErrorFallback({ error }) {
+  return (
+    <View>
+      <Text>Something went wrong:</Text>
+      <Text>{error.message}</Text>
+    </View>
+  );
+}
+
+<ErrorBoundary FallbackComponent={ErrorFallback}>
+  <YourComponent />
+</ErrorBoundary>
+```
+</Warning>
+
+### TypeScript patterns
+
+All components use TypeScript with strict type checking:
+
+```tsx
+// Props interface
+interface ComponentProps {
+  required: string;
+  optional?: number;
+  callback: (value: string) => void;
+}
+
+// Component with typed props
+export function Component({ 
+  required, 
+  optional = 10, 
+  callback 
+}: ComponentProps) {
+  // Component implementation
+}
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Custom hooks" icon="hook" href="/development/hooks">
+    Learn about reusable React hooks
+  </Card>
+  <Card title="App architecture" icon="sitemap" href="/development/architecture">
+    Understand the overall architecture
+  </Card>
+</CardGroup>

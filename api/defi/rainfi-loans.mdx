@@ -1,0 +1,825 @@
+---
+title: RainFi loan operations
+description: Complete API reference for RainFi lending protocol integration
+---
+
+The RainFi loan operations enable collateralized lending on Solana. Users can borrow assets against collateral with transparent terms, competitive APRs, and automated liquidation protection.
+
+## Quote loan calculator
+
+Calculate loan quotes with optimal interest rates based on available liquidity pools.
+
+### Function signature
+
+```typescript
+quoteLoanCalculator(params: {
+  amountIn: number;
+  currencyIn: string;
+  currencyOut: string;
+  borrower: string;
+}): Promise<LoanTransactionRequest>
+```
+
+### Parameters
+
+<ParamField path="amountIn" type="number" required>
+  Amount of collateral to deposit, in smallest units (lamports for SOL)
+</ParamField>
+
+<ParamField path="currencyIn" type="string" required>
+  Collateral currency address. Must be a valid Solana token mint address.
+  
+  Example: `"So11111111111111111111111111111111111111112"` for SOL
+</ParamField>
+
+<ParamField path="currencyOut" type="string" required>
+  Loan currency address. Must be a valid Solana token mint address.
+  
+  Example: `"EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"` for USDC
+</ParamField>
+
+<ParamField path="borrower" type="string" required>
+  Borrower's wallet public key as a base58 string
+</ParamField>
+
+### Response
+
+<ResponseField name="LoanTransactionRequest" type="object">
+  Complete loan request ready for execution
+  
+  <Expandable title="properties">
+    <ResponseField name="borrower" type="string">
+      Borrower's wallet address
+    </ResponseField>
+    
+    <ResponseField name="amountIn" type="number">
+      Collateral amount in smallest units
+    </ResponseField>
+    
+    <ResponseField name="currencyIn" type="string">
+      Collateral currency address
+    </ResponseField>
+    
+    <ResponseField name="currencyOut" type="string">
+      Loan currency address
+    </ResponseField>
+    
+    <ResponseField name="simulation" type="LoanSimulation">
+      Best available loan terms from liquidity pools
+      
+      <Expandable title="simulation properties">
+        <ResponseField name="amount" type="number">
+          Loan amount in smallest units
+        </ResponseField>
+        
+        <ResponseField name="duration" type="number">
+          Loan duration in seconds
+        </ResponseField>
+        
+        <ResponseField name="interest" type="string">
+          Total interest amount as string
+        </ResponseField>
+        
+        <ResponseField name="rainFees" type="number">
+          RainFi protocol fees
+        </ResponseField>
+        
+        <ResponseField name="apr" type="number">
+          Annual percentage rate
+        </ResponseField>
+        
+        <ResponseField name="authorization" type="string">
+          Authorization token for transaction execution
+        </ResponseField>
+        
+        <ResponseField name="bank" type="string">
+          Bank account address
+        </ResponseField>
+        
+        <ResponseField name="pool" type="string">
+          Liquidity pool address
+        </ResponseField>
+        
+        <ResponseField name="baseAmount" type="number">
+          Base loan amount before fees
+        </ResponseField>
+        
+        <ResponseField name="currency" type="string">
+          Loan currency address
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="slippage" type="number">
+      Slippage tolerance in basis points (default: 1000 = 10%)
+    </ResponseField>
+    
+    <ResponseField name="options" type="TransactionOptions">
+      Transaction fee configuration
+      
+      <Expandable title="options properties">
+        <ResponseField name="prioritizationFeeLamports" type="string">
+          Priority fee level: `"fast"`, `"medium"`, or `"slow"`
+        </ResponseField>
+        
+        <ResponseField name="maxFeeCapLamports" type="number">
+          Maximum fee cap in lamports (optional)
+        </ResponseField>
+        
+        <ResponseField name="jitoTipLamports" type="number">
+          Jito MEV tip amount in lamports (optional)
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example usage
+
+<CodeGroup>
+```typescript Basic usage
+import { quoteLoanCalculator } from '@/utils/syntoUtils/agent/plugins/plugin-defi/rainfi/tools';
+
+const quote = await quoteLoanCalculator({
+  amountIn: 1000000000, // 1 SOL
+  currencyIn: "So11111111111111111111111111111111111111112", // SOL
+  currencyOut: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC
+  borrower: "2gLAprD3LUJrSGdcXv88Nvi1ZfHRqpaL7c84SV7M4XWs",
+});
+
+console.log(`Loan amount: ${quote.simulation.amount}`);
+console.log(`APR: ${quote.simulation.apr}%`);
+console.log(`Duration: ${quote.simulation.duration} seconds`);
+```
+
+```typescript With agent
+const result = await agent.defi.quoteLoanCalculator({
+  amountIn: 5000000000, // 5 SOL
+  currencyIn: "So11111111111111111111111111111111111111112",
+  currencyOut: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  borrower: agent.wallet.publicKey.toString(),
+});
+
+// Display to user before executing
+const durationDays = result.simulation.duration / 86400;
+console.log(`You can borrow ${result.simulation.amount / 1e6} USDC`);
+console.log(`APR: ${result.simulation.apr}%`);
+console.log(`Duration: ${durationDays} days`);
+console.log(`Total interest: ${result.simulation.interest}`);
+```
+</CodeGroup>
+
+### API endpoint
+
+```
+POST https://api-v3.rain.fi/loan-calculator/defi/quote
+```
+
+<Tabs>
+  <Tab title="Request body">
+    ```json
+    {
+      "order": ["LowestInterest"],
+      "amountIn": 1000000000,
+      "currencyIn": "So11111111111111111111111111111111111111112",
+      "currencyOut": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "minDurationInDays": 1,
+      "borrower": "2gLAprD3LUJrSGdcXv88Nvi1ZfHRqpaL7c84SV7M4XWs"
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Response">
+    ```json
+    {
+      "order": ["LowestInterest"],
+      "amountIn": 1000000000,
+      "currencyIn": "So11111111111111111111111111111111111111112",
+      "currencyOut": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "borrower": "2gLAprD3LUJrSGdcXv88Nvi1ZfHRqpaL7c84SV7M4XWs",
+      "isReverse": false,
+      "minDurationInDays": 1,
+      "simulations": [
+        {
+          "amount": 109821097,
+          "duration": 691200,
+          "interest": "0",
+          "rainFees": 0,
+          "apr": 0,
+          "pool": "B4eiUfuTBjiy8BbcdU44PT7q57TkmK54dWtT3YJAZZTB",
+          "bank": "6SaE8e2bpm78Ewv8WUqguEPYUoEXRNTn7jzL8xzgH6Bv",
+          "authorization": "C6MnBHEVVRkoFkt6uzJzboYJU4vCZbkjC2EtsXk3GbRs"
+        }
+      ]
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Build loan transaction
+
+Build and execute a loan transaction using pre-calculated quote parameters.
+
+### Function signature
+
+```typescript
+RainfiTransactionBuilder(
+  agent: SolanaAgentKit,
+  params: LoanTransactionRequest
+): Promise<string>
+```
+
+### Parameters
+
+<ParamField path="agent" type="SolanaAgentKit" required>
+  Initialized Solana agent instance with wallet and connection
+</ParamField>
+
+<ParamField path="params" type="LoanTransactionRequest" required>
+  Complete loan request from `quoteLoanCalculator`. See [Quote loan calculator](#quote-loan-calculator) for field details.
+</ParamField>
+
+### Response
+
+<ResponseField name="signature" type="string">
+  Transaction signature after successful execution
+</ResponseField>
+
+### Example usage
+
+<CodeGroup>
+```typescript Complete flow
+import { quoteLoanCalculator, RainfiTransactionBuilder } from '@/utils/syntoUtils/agent/plugins/plugin-defi/rainfi/tools';
+import { SolanaAgentKit } from '@/utils/syntoUtils/agent';
+
+// Step 1: Get loan quote
+const quote = await quoteLoanCalculator({
+  amountIn: 1000000000,
+  currencyIn: "So11111111111111111111111111111111111111112",
+  currencyOut: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  borrower: agent.wallet.publicKey.toString(),
+});
+
+// Step 2: Display quote to user
+console.log(`APR: ${quote.simulation.apr}%`);
+console.log(`Loan amount: ${quote.simulation.amount}`);
+
+// Step 3: Execute transaction
+const signature = await RainfiTransactionBuilder(agent, quote);
+console.log(`Transaction successful: ${signature}`);
+```
+
+```typescript With error handling
+try {
+  const quote = await quoteLoanCalculator({
+    amountIn: 1000000000,
+    currencyIn: "So11111111111111111111111111111111111111112",
+    currencyOut: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    borrower: agent.wallet.publicKey.toString(),
+  });
+  
+  const signature = await RainfiTransactionBuilder(agent, quote);
+  
+  return {
+    status: "success",
+    message: "Loan transaction executed successfully",
+    signature: signature,
+    transaction: {
+      borrower: quote.borrower,
+      amountIn: quote.amountIn,
+      currencyIn: quote.currencyIn,
+      currencyOut: quote.currencyOut,
+    },
+  };
+} catch (error) {
+  return {
+    status: "error",
+    message: error.message,
+  };
+}
+```
+</CodeGroup>
+
+### API endpoint
+
+```
+POST https://api-v3.rain.fi/transaction-builder/defi/take-loan
+```
+
+<Tabs>
+  <Tab title="Request body">
+    ```json
+    {
+      "borrower": "2gLAprD3LUJrSGdcXv88Nvi1ZfHRqpaL7c84SV7M4XWs",
+      "amountIn": 23000000000,
+      "currencyIn": "So11111111111111111111111111111111111111112",
+      "currencyOut": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      "simulation": {
+        "amount": 109821097,
+        "duration": 691200,
+        "interest": "0",
+        "rainFees": 0,
+        "apr": 0,
+        "currency": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "bank": "6SaE8e2bpm78Ewv8WUqguEPYUoEXRNTn7jzL8xzgH6Bv",
+        "authorization": "C6MnBHEVVRkoFkt6uzJzboYJU4vCZbkjC2EtsXk3GbRs",
+        "pool": "B4eiUfuTBjiy8BbcdU44PT7q57TkmK54dWtT3YJAZZTB",
+        "baseAmount": 109821097
+      },
+      "slippage": 50,
+      "options": {
+        "prioritizationFeeLamports": "fast",
+        "maxFeeCapLamports": 0,
+        "jitoTipLamports": 1408925
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Response">
+    ```json
+    {
+      "transactions": ["AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAQAHEb...base64..."],
+      "version": 0,
+      "kind": "defi-take-loan",
+      "blockhash": "4sGjMW1kKj1VqBdKpNxKBJQqGWJKvZqxKGCPxrVyGyB2",
+      "lastValidBlockHeight": 245678910
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Get user loans
+
+Retrieve all active loans for a wallet address.
+
+### Function signature
+
+```typescript
+GetUserLoans(params: {
+  address: string;
+}): Promise<{ loans: UserLoans[] }>
+```
+
+### Parameters
+
+<ParamField path="address" type="string" required>
+  Wallet public key to query loans for
+</ParamField>
+
+### Response
+
+<ResponseField name="loans" type="UserLoans[]">
+  Array of active loans
+  
+  <Expandable title="UserLoans properties">
+    <ResponseField name="borrower" type="string">
+      Borrower's wallet address
+    </ResponseField>
+    
+    <ResponseField name="pubkey" type="string">
+      Loan account public key
+    </ResponseField>
+    
+    <ResponseField name="borrowedAmount" type="string">
+      Total borrowed amount in smallest units
+    </ResponseField>
+    
+    <ResponseField name="expiredAt" type="string">
+      Loan expiration timestamp (ISO 8601)
+    </ResponseField>
+    
+    <ResponseField name="duration" type="number">
+      Loan duration in seconds
+    </ResponseField>
+    
+    <ResponseField name="liquidation" type="number">
+      Liquidation threshold ratio
+    </ResponseField>
+    
+    <ResponseField name="interest" type="string">
+      Total interest amount. Note: 10 = 0.1%
+    </ResponseField>
+    
+    <ResponseField name="principal" type="string">
+      Principal token mint address
+    </ResponseField>
+    
+    <ResponseField name="collateral" type="string">
+      Collateral token mint address
+    </ResponseField>
+    
+    <ResponseField name="collateralAmount" type="string">
+      Collateral amount in smallest units
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example usage
+
+<CodeGroup>
+```typescript Basic usage
+import { GetUserLoans } from '@/utils/syntoUtils/agent/plugins/plugin-defi/rainfi/tools';
+
+const { loans } = await GetUserLoans({
+  address: "2gLAprD3LUJrSGdcXv88Nvi1ZfHRqpaL7c84SV7M4XWs",
+});
+
+console.log(`Found ${loans.length} active loans`);
+
+loans.forEach(loan => {
+  console.log(`Loan: ${loan.pubkey}`);
+  console.log(`Amount: ${loan.borrowedAmount}`);
+  console.log(`Expires: ${loan.expiredAt}`);
+});
+```
+
+```typescript With agent
+const { loans } = await GetUserLoans({
+  address: agent.wallet.publicKey.toString(),
+});
+
+if (loans.length === 0) {
+  console.log("No active loans");
+} else {
+  loans.forEach(loan => {
+    // Convert interest to percentage (10 = 0.1%)
+    const interestPct = parseFloat(loan.interest) / 100;
+    
+    console.log(`Loan account: ${loan.pubkey}`);
+    console.log(`Borrowed: ${loan.borrowedAmount}`);
+    console.log(`Interest: ${interestPct}%`);
+    console.log(`Collateral: ${loan.collateralAmount}`);
+    console.log(`Expires: ${new Date(loan.expiredAt).toLocaleString()}`);
+    console.log('---');
+  });
+}
+```
+
+```typescript Display formatted
+const { loans } = await agent.defi.GetUserLoans({
+  address: agent.wallet.publicKey.toString(),
+});
+
+const formatted = loans.map(loan => ({
+  loanId: loan.pubkey.slice(0, 8) + '...',
+  borrowed: `${parseFloat(loan.borrowedAmount) / 1e6} USDC`,
+  collateral: `${parseFloat(loan.collateralAmount) / 1e9} SOL`,
+  interestRate: `${parseFloat(loan.interest) / 100}%`,
+  expiresIn: Math.floor(
+    (new Date(loan.expiredAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+  ) + ' days',
+}));
+
+console.table(formatted);
+```
+</CodeGroup>
+
+### API endpoint
+
+```
+GET https://api-v3.rain.fi/api/loan/user?pubkey={address}&status=Ongoing&offset=0&limit=20
+```
+
+<Tabs>
+  <Tab title="Response">
+    ```json
+    {
+      "user": "2gLAprD3LUJrSGdcXv88Nvi1ZfHRqpaL7c84SV7M4XWs",
+      "status": "Ongoing",
+      "limit": 20,
+      "offset": 0,
+      "isAdmin": 0,
+      "totalCount": 2,
+      "ongoingCount": 2,
+      "loans": [
+        {
+          "__t": "defi-loan",
+          "pubkey": "8xKjzqKGqz8SjhXVy5tJGBR5Q2vC9YmKbW3pZrNfDxYz",
+          "borrower": "2gLAprD3LUJrSGdcXv88Nvi1ZfHRqpaL7c84SV7M4XWs",
+          "borrowedAmount": "109821097",
+          "expiredAt": "2026-03-11T12:00:00.000Z",
+          "duration": 691200,
+          "liquidation": 75,
+          "interest": "0",
+          "principal": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          "collateral": "So11111111111111111111111111111111111111112",
+          "collateralAmount": "1000000000"
+        }
+      ]
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  Interest values are stored as basis points. To convert to percentage, divide by 100. For example, `"10"` = 0.1%.
+</Note>
+
+---
+
+## Repay loan
+
+Repay an outstanding loan and reclaim collateral.
+
+### Function signature
+
+```typescript
+RepayLoan(
+  agent: SolanaAgentKit,
+  params: RepayLoanRequest
+): Promise<string>
+```
+
+### Parameters
+
+<ParamField path="agent" type="SolanaAgentKit" required>
+  Initialized Solana agent instance with wallet and connection
+</ParamField>
+
+<ParamField path="params" type="RepayLoanRequest" required>
+  Loan repayment parameters
+  
+  <Expandable title="RepayLoanRequest properties">
+    <ParamField path="borrower" type="string" required>
+      Borrower's wallet address
+    </ParamField>
+    
+    <ParamField path="amountIn" type="number" required>
+      Amount to repay in smallest units (must cover principal + interest)
+    </ParamField>
+    
+    <ParamField path="loan" type="string" required>
+      Loan account public key from `GetUserLoans`
+    </ParamField>
+    
+    <ParamField path="options" type="TransactionOptions" required>
+      Transaction fee configuration
+      
+      <Expandable title="options properties">
+        <ParamField path="prioritizationFeeLamports" type="string" required>
+          Priority fee level: `"fast"`, `"medium"`, or `"slow"`
+        </ParamField>
+        
+        <ParamField path="maxFeeCapLamports" type="number">
+          Maximum fee cap in lamports (optional)
+        </ParamField>
+        
+        <ParamField path="jitoTipLamports" type="number">
+          Jito MEV tip amount in lamports (optional)
+        </ParamField>
+      </Expandable>
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response
+
+<ResponseField name="signature" type="string">
+  Transaction signature after successful repayment
+</ResponseField>
+
+### Example usage
+
+<CodeGroup>
+```typescript Basic repayment
+import { GetUserLoans, RepayLoan } from '@/utils/syntoUtils/agent/plugins/plugin-defi/rainfi/tools';
+
+// Get active loans
+const { loans } = await GetUserLoans({
+  address: agent.wallet.publicKey.toString(),
+});
+
+if (loans.length > 0) {
+  const loan = loans[0];
+  
+  // Calculate total repayment (principal + interest)
+  const totalRepayment = parseFloat(loan.borrowedAmount) + parseFloat(loan.interest);
+  
+  // Repay the loan
+  const signature = await RepayLoan(agent, {
+    borrower: agent.wallet.publicKey.toString(),
+    amountIn: totalRepayment,
+    loan: loan.pubkey,
+    options: {
+      prioritizationFeeLamports: "fast",
+      maxFeeCapLamports: 0,
+      jitoTipLamports: 688925,
+    },
+  });
+  
+  console.log(`Loan repaid: ${signature}`);
+}
+```
+
+```typescript With validation
+try {
+  // Fetch user's loans
+  const { loans } = await GetUserLoans({
+    address: agent.wallet.publicKey.toString(),
+  });
+  
+  if (loans.length === 0) {
+    throw new Error("No active loans found");
+  }
+  
+  // Select loan to repay (first one in this example)
+  const loanToRepay = loans[0];
+  
+  // Verify loan hasn't expired
+  const expiryDate = new Date(loanToRepay.expiredAt);
+  if (expiryDate < new Date()) {
+    console.warn("Loan has expired - may be subject to liquidation");
+  }
+  
+  // Calculate exact repayment amount
+  const principal = parseFloat(loanToRepay.borrowedAmount);
+  const interest = parseFloat(loanToRepay.interest);
+  const totalDue = principal + interest;
+  
+  console.log(`Repaying loan ${loanToRepay.pubkey}`);
+  console.log(`Principal: ${principal}`);
+  console.log(`Interest: ${interest}`);
+  console.log(`Total due: ${totalDue}`);
+  
+  // Execute repayment
+  const signature = await RepayLoan(agent, {
+    borrower: agent.wallet.publicKey.toString(),
+    amountIn: totalDue,
+    loan: loanToRepay.pubkey,
+    options: {
+      prioritizationFeeLamports: "fast",
+    },
+  });
+  
+  return {
+    status: "success",
+    message: "Loan repaid successfully",
+    signature,
+    collateralReturned: loanToRepay.collateralAmount,
+  };
+} catch (error) {
+  return {
+    status: "error",
+    message: error.message,
+  };
+}
+```
+
+```typescript Repay specific loan
+// User wants to repay a specific loan by ID
+const loanId = "8xKjzqKGqz8SjhXVy5tJGBR5Q2vC9YmKbW3pZrNfDxYz";
+
+const { loans } = await GetUserLoans({
+  address: agent.wallet.publicKey.toString(),
+});
+
+const targetLoan = loans.find(loan => loan.pubkey === loanId);
+
+if (!targetLoan) {
+  throw new Error(`Loan ${loanId} not found`);
+}
+
+const totalRepayment = 
+  parseFloat(targetLoan.borrowedAmount) + 
+  parseFloat(targetLoan.interest);
+
+const signature = await RepayLoan(agent, {
+  borrower: agent.wallet.publicKey.toString(),
+  amountIn: totalRepayment,
+  loan: targetLoan.pubkey,
+  options: {
+    prioritizationFeeLamports: "fast",
+  },
+});
+
+console.log(`Repaid ${totalRepayment}, collateral returned: ${targetLoan.collateralAmount}`);
+```
+</CodeGroup>
+
+### API endpoint
+
+```
+POST https://api-v3.rain.fi/transaction-builder/defi/repay-loan
+```
+
+<Tabs>
+  <Tab title="Request body">
+    ```json
+    {
+      "borrower": "2gLAprD3LUJrSGdcXv88Nvi1ZfHRqpaL7c84SV7M4XWs",
+      "amountIn": 109821097,
+      "loan": "8xKjzqKGqz8SjhXVy5tJGBR5Q2vC9YmKbW3pZrNfDxYz",
+      "isDefi": true,
+      "options": {
+        "prioritizationFeeLamports": "fast",
+        "maxFeeCapLamports": 0,
+        "jitoTipLamports": 688925
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Response">
+    ```json
+    {
+      "transactions": ["AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAQAHEb...base64..."],
+      "version": 0,
+      "kind": "defi-repay-loan",
+      "blockhash": "9fGjKL2pNm34Qab7xVqRsEPYTnYXMKtn8mzR9yzgR4C3",
+      "lastValidBlockHeight": 245679123
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Ensure you have sufficient balance of the loan currency to cover the full repayment amount (principal + interest).
+</Warning>
+
+## AI agent actions
+
+All RainFi operations are also available as AI agent actions for natural language interaction.
+
+### RAINFI_QUOTE_LOAN_CALCULATOR
+
+<ParamField path="name" type="string">
+  `RAINFI_QUOTE_LOAN_CALCULATOR`
+</ParamField>
+
+<ParamField path="similes" type="string[]">
+  `["quote loan calculator", "calculate loan", "get loan quote", "loan quote calculator"]`
+</ParamField>
+
+<ParamField path="description" type="string">
+  Calculate the loan quote for a given amount and currency. Currencies must be addresses, not symbols. Once you have the quote, display it to the user in a readable format before calling another tool.
+</ParamField>
+
+### RAINFI_TRANSACTION_BUILDER
+
+<ParamField path="name" type="string">
+  `RAINFI_TRANSACTION_BUILDER`
+</ParamField>
+
+<ParamField path="similes" type="string[]">
+  `["build rainfi transaction", "execute loan transaction", "build loan transaction", "create rainfi transaction", "execute rainfi loan"]`
+</ParamField>
+
+<ParamField path="description" type="string">
+  Build and execute a loan transaction on RainFi using the loan quote parameters. The borrower is automatically set to the wallet public key.
+</ParamField>
+
+### RAINFI_GET_USER_LOANS
+
+<ParamField path="name" type="string">
+  `RAINFI_GET_USER_LOANS`
+</ParamField>
+
+<ParamField path="similes" type="string[]">
+  `["get user loans", "get user loan"]`
+</ParamField>
+
+<ParamField path="description" type="string">
+  Get user loans from RainFi. Displays loans in a readable format, converts interest to percentage (10 = 0.1%), and converts amounts from smallest units to correct decimals.
+</ParamField>
+
+### RAINFI_REPAY_LOAN
+
+<ParamField path="name" type="string">
+  `RAINFI_REPAY_LOAN`
+</ParamField>
+
+<ParamField path="similes" type="string[]">
+  `["repay loan", "repay loans"]`
+</ParamField>
+
+<ParamField path="description" type="string">
+  Repay a loan from RainFi using the provided loan account address.
+</ParamField>
+
+## Source code reference
+
+<CardGroup cols={2}>
+  <Card title="Plugin index" icon="code" href="#">
+    `~/workspace/source/utils/syntoUtils/agent/plugins/plugin-defi/index.ts:1`
+  </Card>
+  <Card title="Quote calculator" icon="code" href="#">
+    `~/workspace/source/utils/syntoUtils/agent/plugins/plugin-defi/rainfi/tools/quoteLoanCalculator.ts:10`
+  </Card>
+  <Card title="Transaction builder" icon="code" href="#">
+    `~/workspace/source/utils/syntoUtils/agent/plugins/plugin-defi/rainfi/tools/RainfiTransactionBuilder.ts:15`
+  </Card>
+  <Card title="Get user loans" icon="code" href="#">
+    `~/workspace/source/utils/syntoUtils/agent/plugins/plugin-defi/rainfi/tools/GetUserLoans.ts:10`
+  </Card>
+  <Card title="Repay loan" icon="code" href="#">
+    `~/workspace/source/utils/syntoUtils/agent/plugins/plugin-defi/rainfi/tools/RepayLoans.ts:15`
+  </Card>
+  <Card title="Type definitions" icon="code" href="#">
+    `~/workspace/source/utils/syntoUtils/agent/plugins/plugin-defi/rainfi/types/index.ts:1`
+  </Card>
+</CardGroup>

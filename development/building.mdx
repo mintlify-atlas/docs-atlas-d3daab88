@@ -1,0 +1,680 @@
+---
+title: Building and deploying
+description: Learn how to build, test, and deploy Synto Mobile to iOS and Android devices
+---
+
+## Overview
+
+Synto Mobile uses **Expo** and **EAS (Expo Application Services)** for building and deploying the app. The project supports development builds, preview builds, and production releases.
+
+## Prerequisites
+
+Before building the app, ensure you have:
+
+<Steps>
+  <Step title="Node.js and package manager">
+    - Node.js 18 or later
+    - pnpm 10.12.3 (specified in `eas.json`)
+    
+    ```bash
+    # Install pnpm globally
+    npm install -g pnpm@10.12.3
+    ```
+  </Step>
+  
+  <Step title="Expo CLI">
+    ```bash
+    npm install -g expo-cli
+    ```
+  </Step>
+  
+  <Step title="EAS CLI (for cloud builds)">
+    ```bash
+    npm install -g eas-cli
+    ```
+  </Step>
+  
+  <Step title="Development tools">
+    For local development:
+    - **Android:** Android Studio with SDK
+    - **iOS:** Xcode 14+ (macOS only)
+  </Step>
+</Steps>
+
+## Environment setup
+
+### Install dependencies
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd synto-mobile
+
+# Install dependencies
+pnpm install
+```
+
+### Environment variables
+
+Create a `.env` file in the project root:
+
+```bash .env
+# Backend configuration
+EXPO_PUBLIC_BACKEND_URL=https://your-backend-url.com
+EXPO_PUBLIC_BACKEND_KEY=your-api-key
+
+# Solana RPC (optional, defaults to public RPC)
+NEXT_PUBLIC_SOLANA_RPC=https://api.devnet.solana.com
+```
+
+<Warning>
+Never commit `.env` files to version control. Add `.env` to your `.gitignore` file.
+</Warning>
+
+## Development
+
+### Running the development server
+
+Start the Expo development server:
+
+<Tabs>
+  <Tab title="Quick start">
+    ```bash
+    pnpm dev
+    # or
+    pnpm start
+    ```
+    
+    This starts the Metro bundler and opens the Expo DevTools.
+  </Tab>
+  
+  <Tab title="Platform-specific">
+    ```bash
+    # iOS (macOS only)
+    pnpm ios
+    
+    # Android
+    pnpm android
+    
+    # Web (for testing)
+    pnpm web
+    ```
+  </Tab>
+</Tabs>
+
+### Development workflow
+
+<Steps>
+  <Step title="Start development server">
+    ```bash
+    pnpm dev
+    ```
+  </Step>
+  
+  <Step title="Scan QR code">
+    - **iOS:** Use Camera app to scan QR code
+    - **Android:** Use Expo Go app to scan QR code
+  </Step>
+  
+  <Step title="Enable hot reload">
+    Changes to code will automatically reload the app.
+  </Step>
+</Steps>
+
+<Note>
+For full native functionality (like Mobile Wallet Adapter), you need to create a development build instead of using Expo Go.
+</Note>
+
+## Code quality
+
+The project includes several npm scripts for maintaining code quality:
+
+### Linting
+
+<CodeGroup>
+```bash Check for issues
+pnpm lint:check
+```
+
+```bash Fix issues automatically
+pnpm lint
+```
+</CodeGroup>
+
+The project uses `eslint-config-expo` for linting rules.
+
+### Formatting
+
+<CodeGroup>
+```bash Check formatting
+pnpm fmt:check
+```
+
+```bash Format code
+pnpm fmt
+```
+</CodeGroup>
+
+Prettier formats these file types:
+- `app/**/*.{js,jsx,ts,tsx}`
+- `constants/**/*.{js,jsx,ts,tsx}`
+- `hooks/**/*.{js,jsx,ts,tsx}`
+- `components/**/*.{js,jsx,ts,tsx}`
+
+### Type checking
+
+```bash
+pnpm build
+# This runs: tsc --noEmit && npm run android:build
+```
+
+TypeScript is configured with strict mode enabled:
+
+```json tsconfig.json
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/*": ["./*"]
+    }
+  }
+}
+```
+
+### CI pipeline
+
+Run all checks before committing:
+
+```bash
+pnpm ci
+```
+
+This runs:
+1. Type checking (`tsc --noEmit`)
+2. Linting (`lint:check`)
+3. Format checking (`fmt:check`)
+4. Android prebuild
+
+## Building the app
+
+### Build profiles
+
+The app uses three build profiles defined in `eas.json`:
+
+<Tabs>
+  <Tab title="Development">
+    ```json eas.json
+    {
+      "development": {
+        "developmentClient": true,
+        "distribution": "internal"
+      }
+    }
+    ```
+    
+    **Purpose:** For testing with full native functionality
+    
+    **Features:**
+    - Includes development tools
+    - Fast refresh enabled
+    - Internal distribution (TestFlight/Internal Testing)
+  </Tab>
+  
+  <Tab title="Preview">
+    ```json eas.json
+    {
+      "preview": {
+        "distribution": "internal"
+      }
+    }
+    ```
+    
+    **Purpose:** Testing release builds internally
+    
+    **Features:**
+    - Production-like build
+    - Internal distribution only
+    - No development tools
+  </Tab>
+  
+  <Tab title="Production">
+    ```json eas.json
+    {
+      "production": {
+        "autoIncrement": true
+      }
+    }
+    ```
+    
+    **Purpose:** App Store/Play Store releases
+    
+    **Features:**
+    - Fully optimized build
+    - Auto-increments version numbers
+    - Ready for public distribution
+  </Tab>
+</Tabs>
+
+### EAS Build (Cloud builds)
+
+<Note>
+EAS Build is the recommended way to build Expo apps. It handles all the complexity of native builds in the cloud.
+</Note>
+
+<Steps>
+  <Step title="Login to Expo">
+    ```bash
+    eas login
+    ```
+  </Step>
+  
+  <Step title="Configure project">
+    ```bash
+    eas build:configure
+    ```
+    
+    This creates `eas.json` if it doesn't exist.
+  </Step>
+  
+  <Step title="Build for Android">
+    ```bash
+    # Development build
+    eas build --profile development --platform android
+    
+    # Preview build
+    eas build --profile preview --platform android
+    
+    # Production build
+    eas build --profile production --platform android
+    ```
+  </Step>
+  
+  <Step title="Build for iOS">
+    ```bash
+    # Development build
+    eas build --profile development --platform ios
+    
+    # Preview build
+    eas build --profile preview --platform ios
+    
+    # Production build
+    eas build --profile production --platform ios
+    ```
+    
+    <Warning>
+    iOS builds require an Apple Developer account ($99/year).
+    </Warning>
+  </Step>
+</Steps>
+
+### Local builds
+
+You can also build locally if you have the required development tools installed.
+
+<Tabs>
+  <Tab title="Android">
+    ```bash
+    # Prebuild (generates android directory)
+    pnpm android:build
+    # or
+    expo prebuild -p android
+    
+    # Build APK
+    cd android
+    ./gradlew assembleRelease
+    
+    # Build AAB (for Play Store)
+    ./gradlew bundleRelease
+    ```
+    
+    Output location:
+    - APK: `android/app/build/outputs/apk/release/app-release.apk`
+    - AAB: `android/app/build/outputs/bundle/release/app-release.aab`
+  </Tab>
+  
+  <Tab title="iOS">
+    ```bash
+    # Prebuild (generates ios directory)
+    expo prebuild -p ios
+    
+    # Build with Xcode
+    # 1. Open ios/syntomobile.xcworkspace in Xcode
+    # 2. Select your target device/simulator
+    # 3. Product > Archive
+    # 4. Distribute App
+    ```
+  </Tab>
+</Tabs>
+
+## Configuration files
+
+### app.json
+
+Main Expo configuration:
+
+```json app.json
+{
+  "expo": {
+    "name": "synto-mobile",
+    "slug": "synto-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "templateexpobasic",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "android": {
+      "package": "com.juiceee.syntomobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      ["expo-splash-screen", { /* ... */ }],
+      "expo-web-browser",
+      "expo-font"
+    ]
+  }
+}
+```
+
+<AccordionGroup>
+  <Accordion title="Key configuration options">
+    - `newArchEnabled: true` - Enables React Native's new architecture (Fabric + TurboModules)
+    - `scheme` - Deep linking scheme for the app
+    - `userInterfaceStyle: "automatic"` - Supports both light and dark mode
+    - `experiments.typedRoutes: true` - Type-safe routing with Expo Router
+  </Accordion>
+  
+  <Accordion title="Splash screen configuration">
+    ```json
+    {
+      "backgroundColor": "#FFFFFF",
+      "dark": {
+        "backgroundColor": "#000000",
+        "image": "./assets/images/splash-icon.png"
+      },
+      "image": "./assets/images/splash-icon.png",
+      "imageWidth": 200,
+      "resizeMode": "contain"
+    }
+    ```
+    
+    Separate configurations for light and dark mode.
+  </Accordion>
+</AccordionGroup>
+
+### package.json scripts
+
+Available npm scripts:
+
+```json package.json
+{
+  "scripts": {
+    "android": "expo run:android",
+    "android:build": "expo prebuild -p android",
+    "build": "tsc --noEmit && npm run android:build",
+    "ci": "tsc --noEmit && npm run lint:check && npm run fmt:check && npm run android:build",
+    "dev": "expo start",
+    "fmt": "prettier --write 'app/**/*.{js,jsx,ts,tsx}' ...",
+    "fmt:check": "prettier --check 'app/**/*.{js,jsx,ts,tsx}' ...",
+    "ios": "expo run:ios",
+    "lint": "expo lint --fix",
+    "lint:check": "expo lint",
+    "start": "expo start",
+    "web": "expo start --web"
+  }
+}
+```
+
+## Testing
+
+### Manual testing
+
+<Steps>
+  <Step title="Install development build">
+    Build and install a development build on your device:
+    
+    ```bash
+    eas build --profile development --platform android
+    # or
+    eas build --profile development --platform ios
+    ```
+  </Step>
+  
+  <Step title="Connect to dev server">
+    After installing, launch the app and shake your device to open the developer menu. Select "Connect to dev server" and enter your computer's IP address.
+  </Step>
+  
+  <Step title="Test features">
+    - Wallet connection
+    - Transaction signing
+    - Chat functionality
+    - Token transfers
+    - Network switching
+  </Step>
+</Steps>
+
+### Testing on different networks
+
+The app supports multiple Solana networks:
+
+```tsx constants/app-config.ts
+export class AppConfig {
+  static clusters: Cluster[] = [
+    {
+      id: "solana:devnet",
+      name: "Devnet",
+      endpoint: clusterApiUrl("devnet"),
+      network: ClusterNetwork.Devnet,
+    },
+    {
+      id: "solana:testnet",
+      name: "Testnet",
+      endpoint: clusterApiUrl("testnet"),
+      network: ClusterNetwork.Testnet,
+    },
+  ];
+}
+```
+
+<Note>
+Switch networks from the settings screen to test on different Solana clusters.
+</Note>
+
+## Deployment
+
+### Android deployment
+
+<Steps>
+  <Step title="Build production AAB">
+    ```bash
+    eas build --profile production --platform android
+    ```
+  </Step>
+  
+  <Step title="Download build artifact">
+    After the build completes, download the `.aab` file from the Expo dashboard.
+  </Step>
+  
+  <Step title="Upload to Google Play Console">
+    1. Go to [Google Play Console](https://play.google.com/console)
+    2. Select your app or create a new app
+    3. Navigate to "Release" > "Production"
+    4. Upload the `.aab` file
+    5. Fill in release details
+    6. Submit for review
+  </Step>
+</Steps>
+
+### iOS deployment
+
+<Steps>
+  <Step title="Build production IPA">
+    ```bash
+    eas build --profile production --platform ios
+    ```
+  </Step>
+  
+  <Step title="Submit to App Store">
+    ```bash
+    eas submit --platform ios
+    ```
+    
+    Or manually upload via Xcode or App Store Connect.
+  </Step>
+  
+  <Step title="Configure App Store listing">
+    1. Go to [App Store Connect](https://appstoreconnect.apple.com)
+    2. Fill in app metadata (description, screenshots, etc.)
+    3. Submit for review
+  </Step>
+</Steps>
+
+### Auto-incrementing versions
+
+The production profile has `autoIncrement: true`, which automatically bumps the build number on each build.
+
+To manually update the version:
+
+```json app.json
+{
+  "expo": {
+    "version": "1.0.1",  // User-facing version
+    "ios": {
+      "buildNumber": "2"  // Internal build number
+    },
+    "android": {
+      "versionCode": 2    // Internal version code
+    }
+  }
+}
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Metro bundler errors">
+    Clear cache and restart:
+    
+    ```bash
+    # Clear Metro cache
+    expo start --clear
+    
+    # Clear all caches
+    rm -rf node_modules
+    pnpm install
+    expo start --clear
+    ```
+  </Accordion>
+  
+  <Accordion title="Native module errors">
+    Rebuild native directories:
+    
+    ```bash
+    # Remove native directories
+    rm -rf android ios
+    
+    # Regenerate
+    expo prebuild --clean
+    ```
+  </Accordion>
+  
+  <Accordion title="Build failures on EAS">
+    Check the build logs in the Expo dashboard:
+    
+    1. Go to [expo.dev](https://expo.dev)
+    2. Navigate to your project
+    3. Click on the failed build
+    4. Review the logs for errors
+    
+    Common issues:
+    - Missing credentials (iOS)
+    - Invalid package name (Android)
+    - Dependency conflicts
+  </Accordion>
+  
+  <Accordion title="Wallet adapter not working">
+    Mobile Wallet Adapter requires a development build or production build. It doesn't work with Expo Go.
+    
+    ```bash
+    # Build a development build
+    eas build --profile development --platform android
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Use EAS Build" icon="cloud">
+    Cloud builds are more reliable and don't require local setup
+  </Card>
+  <Card title="Test on real devices" icon="mobile">
+    Test wallet adapter and native features on physical devices
+  </Card>
+  <Card title="Version control" icon="code-branch">
+    Commit `eas.json` and `app.json` to version control
+  </Card>
+  <Card title="Environment variables" icon="key">
+    Never commit `.env` files; use EAS Secrets for sensitive values
+  </Card>
+</CardGroup>
+
+## Performance optimization
+
+<Steps>
+  <Step title="Enable Hermes">
+    Hermes is enabled by default in Expo. Verify in `app.json`:
+    
+    ```json
+    {
+      "expo": {
+        "jsEngine": "hermes"
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Optimize images">
+    Use optimized image formats and appropriate sizes:
+    
+    ```tsx
+    import { Image } from 'expo-image';
+    
+    <Image
+      source={{ uri: 'https://...' }}
+      contentFit="cover"
+      transition={200}
+    />
+    ```
+  </Step>
+  
+  <Step title="Bundle size analysis">
+    Analyze your bundle size:
+    
+    ```bash
+    npx react-native-bundle-visualizer
+    ```
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="App architecture" icon="sitemap" href="/development/architecture">
+    Understand the app structure
+  </Card>
+  <Card title="Component structure" icon="cubes" href="/development/components">
+    Learn about components
+  </Card>
+  <Card title="Custom hooks" icon="hook" href="/development/hooks">
+    Explore React hooks
+  </Card>
+  <Card title="Expo documentation" icon="book" href="https://docs.expo.dev">
+    Official Expo docs
+  </Card>
+</CardGroup>

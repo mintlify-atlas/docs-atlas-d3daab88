@@ -1,0 +1,382 @@
+---
+title: "Balance operations"
+description: "Check SOL and SPL token balances for any Solana wallet address"
+---
+
+The Token Plugin provides three functions for checking balances, each optimized for different use cases.
+
+## get_balance
+
+Get the balance of SOL or an SPL token for the agent's wallet.
+
+### Function signature
+
+```typescript
+function get_balance(
+  agent: SolanaAgentKit,
+  token_address?: PublicKey
+): Promise<number>
+```
+
+### Parameters
+
+<ParamField path="agent" type="SolanaAgentKit" required>
+  The agent instance containing wallet and connection information
+</ParamField>
+
+<ParamField path="token_address" type="PublicKey" optional>
+  Optional SPL token mint address. If not provided, returns SOL balance in UI units (not lamports)
+</ParamField>
+
+### Returns
+
+<ResponseField name="balance" type="number">
+  The balance in UI units (for SOL: actual SOL amount, not lamports; for tokens: amount based on token decimals)
+</ResponseField>
+
+### Example usage
+
+<CodeGroup>
+```typescript Check SOL balance
+import { get_balance } from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/tools';
+
+const solBalance = await get_balance(agent);
+console.log(`SOL Balance: ${solBalance}`);
+// Output: SOL Balance: 2.5
+```
+
+```typescript Check SPL token balance
+import { get_balance } from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/tools';
+import { PublicKey } from '@solana/web3.js';
+
+const usdcMint = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+const usdcBalance = await get_balance(agent, usdcMint);
+console.log(`USDC Balance: ${usdcBalance}`);
+// Output: USDC Balance: 100.50
+```
+</CodeGroup>
+
+### Implementation details
+
+For SOL balances, the function queries the network and converts lamports to SOL:
+
+```typescript
+const lamports = await agent.connection.getBalance(agent.wallet.publicKey);
+return lamports / LAMPORTS_PER_SOL;
+```
+
+For SPL tokens, it retrieves the token account balance directly:
+
+```typescript
+const tokenAccount = await agent.connection.getTokenAccountBalance(token_address);
+return tokenAccount.value.uiAmount || 0;
+```
+
+<Note>
+  The function returns `0` if a token account doesn't exist, rather than throwing an error.
+</Note>
+
+---
+
+## get_balance_other
+
+Get the balance of SOL or an SPL token for any wallet address (not just the agent's wallet).
+
+### Function signature
+
+```typescript
+function get_balance_other(
+  agent: SolanaAgentKit,
+  wallet_address: PublicKey,
+  token_address?: PublicKey
+): Promise<number>
+```
+
+### Parameters
+
+<ParamField path="agent" type="SolanaAgentKit" required>
+  The agent instance used for blockchain connection
+</ParamField>
+
+<ParamField path="wallet_address" type="PublicKey" required>
+  The wallet address to check balance for
+</ParamField>
+
+<ParamField path="token_address" type="PublicKey" optional>
+  Optional SPL token mint address. If not provided, returns SOL balance
+</ParamField>
+
+### Returns
+
+<ResponseField name="balance" type="number">
+  The balance in UI units, or `0` if the account doesn't exist
+</ResponseField>
+
+### Example usage
+
+<CodeGroup>
+```typescript Check another wallet's SOL
+import { get_balance_other } from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/tools';
+import { PublicKey } from '@solana/web3.js';
+
+const otherWallet = new PublicKey('8x2dR8Mpzuz2YqyZyZjUbYWKSWesBo5jMx2Q9Y86udVk');
+const balance = await get_balance_other(agent, otherWallet);
+console.log(`Wallet ${otherWallet.toBase58()} has ${balance} SOL`);
+```
+
+```typescript Check another wallet's tokens
+import { get_balance_other } from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/tools';
+import { PublicKey } from '@solana/web3.js';
+
+const wallet = new PublicKey('8x2dR8Mpzuz2YqyZyZjUbYWKSWesBo5jMx2Q9Y86udVk');
+const usdcMint = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+
+const usdcBalance = await get_balance_other(agent, wallet, usdcMint);
+console.log(`USDC Balance: ${usdcBalance}`);
+```
+</CodeGroup>
+
+### Error handling
+
+The function throws descriptive errors if the balance check fails:
+
+```typescript
+try {
+  const balance = await get_balance_other(agent, walletAddress, tokenMint);
+} catch (error) {
+  console.error(`Error fetching balance: ${error.message}`);
+}
+```
+
+<Warning>
+  If no token accounts are found for the specified mint, the function logs a warning and returns `0` instead of throwing an error.
+</Warning>
+
+---
+
+## get_token_balance
+
+Get comprehensive token balances for a wallet, including SOL and all SPL tokens with metadata.
+
+### Function signature
+
+```typescript
+function get_token_balance(
+  agent: SolanaAgentKit,
+  walletAddress?: PublicKey
+): Promise<{
+  sol: number;
+  tokens: Array<{
+    tokenAddress: string;
+    name: string;
+    symbol: string;
+    balance: number;
+    decimals: number;
+  }>;
+}>
+```
+
+### Parameters
+
+<ParamField path="agent" type="SolanaAgentKit" required>
+  The agent instance for blockchain connection
+</ParamField>
+
+<ParamField path="walletAddress" type="PublicKey" optional>
+  The wallet address to check. Defaults to the agent's wallet if not provided
+</ParamField>
+
+### Returns
+
+<ResponseField name="sol" type="number">
+  The SOL balance in UI units
+</ResponseField>
+
+<ResponseField name="tokens" type="array">
+  Array of token balances with metadata. Zero-balance tokens are automatically filtered out.
+  
+  <Expandable title="Token object properties">
+    <ResponseField name="tokenAddress" type="string">
+      The SPL token mint address
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      The token's full name (e.g., "USD Coin")
+    </ResponseField>
+    
+    <ResponseField name="symbol" type="string">
+      The token's ticker symbol (e.g., "USDC")
+    </ResponseField>
+    
+    <ResponseField name="balance" type="number">
+      The token balance in UI units
+    </ResponseField>
+    
+    <ResponseField name="decimals" type="number">
+      The number of decimals the token uses
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example usage
+
+<CodeGroup>
+```typescript Get all balances
+import { get_token_balance } from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/tools';
+
+const balances = await get_token_balance(agent);
+
+console.log(`SOL: ${balances.sol}`);
+console.log('\nTokens:');
+balances.tokens.forEach(token => {
+  console.log(`${token.symbol}: ${token.balance}`);
+});
+```
+
+```typescript Output example
+// Example output:
+// SOL: 2.5
+//
+// Tokens:
+// USDC: 100.50
+// BONK: 1000000
+// RAY: 25.75
+```
+
+```typescript Get specific wallet balances
+import { get_token_balance } from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/tools';
+import { PublicKey } from '@solana/web3.js';
+
+const wallet = new PublicKey('8x2dR8Mpzuz2YqyZyZjUbYWKSWesBo5jMx2Q9Y86udVk');
+const balances = await get_token_balance(agent, wallet);
+
+// Display in a UI-friendly format
+const portfolio = [
+  { asset: 'SOL', balance: balances.sol },
+  ...balances.tokens.map(t => ({ asset: t.symbol, balance: t.balance }))
+];
+```
+</CodeGroup>
+
+### Implementation details
+
+The function performs the following steps:
+
+1. Queries SOL balance and all token accounts in parallel for efficiency
+2. Filters out zero-balance token accounts
+3. Fetches metadata (name, symbol) for each token mint
+4. Returns a structured object with all balances and metadata
+
+```typescript
+const [lamportsBalance, tokenAccountData] = await Promise.all([
+  agent.connection.getBalance(walletAddress ?? agent.wallet.publicKey),
+  agent.connection.getParsedTokenAccountsByOwner(
+    walletAddress ?? agent.wallet.publicKey,
+    { programId: TOKEN_PROGRAM_ID }
+  )
+]);
+```
+
+<Info>
+  This function is ideal for building portfolio views or wallet dashboards, as it returns all necessary information in a single call.
+</Info>
+
+---
+
+## Additional utilities
+
+### getWalletAddress
+
+Get the agent's wallet address as a base58-encoded string.
+
+```typescript
+import { getWalletAddress } from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/tools';
+
+const address = getWalletAddress(agent);
+console.log(`Wallet address: ${address}`);
+// Output: Wallet address: 8x2dR8Mpzuz2YqyZyZjUbYWKSWesBo5jMx2Q9Y86udVk
+```
+
+### getTPS
+
+Get the current Solana network transactions per second.
+
+```typescript
+import { getTPS } from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/tools';
+
+const tps = await getTPS(agent);
+console.log(`Network TPS: ${tps.toFixed(2)}`);
+// Output: Network TPS: 3456.78
+```
+
+<Warning>
+  `getTPS` throws an error if no performance samples are available from the network.
+</Warning>
+
+### request_faucet_funds
+
+Request 5 SOL from the Solana faucet (devnet/testnet only).
+
+```typescript
+import { request_faucet_funds } from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/tools';
+
+const signature = await request_faucet_funds(agent);
+console.log(`Airdrop signature: ${signature}`);
+```
+
+<Note>
+  This function only works on devnet and testnet. It will fail on mainnet-beta.
+</Note>
+
+---
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Use the right function for your use case" icon="lightbulb">
+    - Use `get_balance()` for quick checks of the agent's own balance
+    - Use `get_balance_other()` when you need to check other wallets
+    - Use `get_token_balance()` when building portfolio views or dashboards
+  </Accordion>
+  
+  <Accordion title="Handle zero balances gracefully" icon="circle-check">
+    All balance functions return `0` for non-existent accounts instead of throwing errors. Always check for zero balances in your UI:
+    
+    ```typescript
+    const balance = await get_balance(agent, tokenMint);
+    if (balance === 0) {
+      console.log('No balance or account does not exist');
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Cache balance data when appropriate" icon="database">
+    Balance queries require network calls. Consider caching results for a few seconds if you're displaying balances in a frequently-updated UI:
+    
+    ```typescript
+    let cachedBalance: number | null = null;
+    let cacheTime: number = 0;
+    const CACHE_DURATION = 5000; // 5 seconds
+    
+    async function getCachedBalance() {
+      if (cachedBalance && Date.now() - cacheTime < CACHE_DURATION) {
+        return cachedBalance;
+      }
+      cachedBalance = await get_balance(agent);
+      cacheTime = Date.now();
+      return cachedBalance;
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Transfer functions" icon="paper-plane" href="/api/token/transfer">
+    Learn how to transfer SOL and SPL tokens
+  </Card>
+  <Card title="Jupiter integration" icon="arrow-right-arrow-left" href="/api/token/jupiter-integration">
+    Swap tokens using Jupiter Exchange
+  </Card>
+</CardGroup>

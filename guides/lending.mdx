@@ -1,0 +1,621 @@
+---
+title: Lending with RainFi
+description: Learn how to borrow assets and manage loans using RainFi in Synto Mobile
+---
+
+Synto Mobile integrates with RainFi, a decentralized lending protocol on Solana, enabling you to borrow assets against your crypto collateral directly from your mobile device.
+
+## What is RainFi?
+
+RainFi is a decentralized lending protocol that provides:
+- Instant loans with crypto collateral
+- Competitive interest rates
+- Multiple currency support (SOL, USDC, USDT, etc.)
+- Flexible loan durations
+- No credit checks required
+
+<Note>
+RainFi uses a pool-based lending model where liquidity providers supply assets that borrowers can access against collateral.
+</Note>
+
+## How lending works
+
+<Steps>
+  <Step title="Get loan quote">
+    Request a quote specifying collateral currency, borrow currency, and amount.
+  </Step>
+  
+  <Step title="Review terms">
+    Check loan parameters:
+    - Interest rate and APR
+    - Loan duration
+    - Collateral required
+    - Liquidation threshold
+  </Step>
+  
+  <Step title="Execute loan">
+    Confirm and sign the transaction. Your collateral is locked and borrowed funds are received.
+  </Step>
+  
+  <Step title="Monitor loan">
+    Track your loan status, expiration date, and health ratio.
+  </Step>
+  
+  <Step title="Repay loan">
+    Repay principal + interest before expiration to unlock collateral.
+  </Step>
+</Steps>
+
+## Getting a loan quote
+
+### Request quote with AI agent
+
+Use natural language to get loan quotes:
+
+<CodeGroup>
+
+```bash Get quote
+"Get loan quote for 1000 USDC"
+```
+
+```bash Calculate loan
+"Calculate loan with SOL collateral for USDC"
+```
+
+```bash Quote loan
+"What can I borrow with 10 SOL?"
+```
+
+</CodeGroup>
+
+### Supported commands
+
+The AI agent recognizes:
+- "quote loan calculator"
+- "calculate loan"
+- "get loan quote"
+- "loan quote calculator"
+
+### Quote implementation
+
+Here's how loan quotes work:
+
+```typescript
+const quoteLoanCalculatorAction: Action = {
+  name: "RAINFI_QUOTE_LOAN_CALCULATOR",
+  description: "Calculate the loan quote for a given amount and currency",
+  schema: z.object({
+    amountIn: z.number().describe("Amount to borrow (in smallest units)"),
+    currencyIn: z.string().describe("Input currency address"),
+    currencyOut: z.string().describe("Output currency address"),
+    borrower: z.string().describe("Borrower's wallet address"),
+  }),
+  handler: async (agent, input) => {
+    const loanTransactionRequest = await quoteLoanCalculator({
+      amountIn: input.amountIn,
+      currencyIn: input.currencyIn,
+      currencyOut: input.currencyOut,
+      borrower: agent.wallet.publicKey.toString(),
+    });
+
+    return {
+      status: "success",
+      message: "Loan quote calculated successfully",
+      loanTransactionRequest,
+    };
+  },
+};
+```
+
+### Quote parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `amountIn` | number | Yes | Amount to borrow in smallest units (lamports) |
+| `currencyIn` | string | Yes | Collateral currency address |
+| `currencyOut` | string | Yes | Borrow currency address |
+| `borrower` | string | Yes | Your wallet address (auto-filled) |
+
+<Warning>
+Currency parameters must be token addresses (e.g., "So11111111111111111111111111111111111111112" for SOL), not symbols.
+</Warning>
+
+### Quote response
+
+A successful quote includes:
+
+```typescript
+{
+  borrower: "2gLAprD3LUJrSGdcXv88Nvi1ZfHRqpaL7c84SV7M4XWs",
+  amountIn: 1000000000,  // 1 SOL in lamports
+  currencyIn: "So11111111111111111111111111111111111111112",  // SOL
+  currencyOut: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC
+  simulation: {
+    amount: 1000000000,      // Loan amount
+    duration: 7,             // 7 days
+    interest: "0.1",         // Interest amount
+    rainFees: 0.01,          // Protocol fees
+    apr: 5.2,                // Annual percentage rate
+    authorization: "abc123",  // Authorization token
+    bank: "rainfi-bank-1",   // Lending pool
+    pool: "main",            // Pool identifier
+    baseAmount: 1000000000,  // Base loan amount
+    currency: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+  },
+  options: {
+    prioritizationFeeLamports: "fast"
+  },
+  slippage: 50  // 0.5% slippage
+}
+```
+
+<Tip>
+Always review the loan quote carefully before executing. Pay special attention to interest rate, duration, and liquidation threshold.
+</Tip>
+
+## Executing a loan
+
+Once you have a quote, execute the loan transaction.
+
+### Build and execute loan
+
+Use the AI agent with loan parameters:
+
+```bash
+"Build loan transaction with my quote"
+"Execute rainfi loan"
+```
+
+### Loan execution implementation
+
+```typescript
+const rainfiTransactionBuilderAction: Action = {
+  name: "RAINFI_TRANSACTION_BUILDER",
+  description: "Build and execute a loan transaction on Rainfi",
+  schema: loanTransactionRequestSchema,
+  handler: async (agent, input) => {
+    const loanRequest = loanTransactionRequestSchema.parse(input);
+    const tx = await RainfiTransactionBuilder(agent, loanRequest);
+
+    return {
+      status: "success",
+      message: "Loan transaction executed successfully",
+      signature: tx.toString(),
+      transaction: {
+        borrower: loanRequest.borrower,
+        amountIn: loanRequest.amountIn,
+        currencyIn: loanRequest.currencyIn,
+        currencyOut: loanRequest.currencyOut,
+      },
+    };
+  },
+};
+```
+
+### Transaction parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `borrower` | string | Wallet address (auto-filled) |
+| `amountIn` | number | Collateral amount in lamports |
+| `currencyIn` | string | Collateral token address |
+| `currencyOut` | string | Borrow token address |
+| `simulation` | object | Loan simulation from quote |
+| `slippage` | number | Slippage tolerance (BPS) |
+| `options` | object | Transaction fee options |
+
+### Transaction options
+
+```typescript
+interface TransactionOptions {
+  prioritizationFeeLamports: string;  // "fast", "medium", "slow"
+  maxFeeCapLamports?: number;         // Maximum fee cap
+  jitoTipLamports?: number;           // MEV protection tip
+}
+```
+
+<Note>
+Use "fast" priority for time-sensitive loans or during high network congestion. This costs more in fees but ensures faster execution.
+</Note>
+
+## Managing active loans
+
+### View your loans
+
+Check all your active loans:
+
+<CodeGroup>
+
+```bash Get loans
+"Show my active loans"
+```
+
+```bash Check loans
+"Get user loans"
+```
+
+```bash View loans
+"What loans do I have?"
+```
+
+</CodeGroup>
+
+### Get loans implementation
+
+```typescript
+const rainfiGetUserLoansAction: Action = {
+  name: "RAINFI_GET_USER_LOANS",
+  description: "Get user loans from Rainfi",
+  handler: async (agent) => {
+    const address = agent.wallet.publicKey.toString();
+    const { loans } = await GetUserLoans({ address });
+
+    return {
+      status: "success",
+      message: "User loans fetched successfully",
+      loans,
+    };
+  },
+};
+```
+
+### Loan details
+
+Each loan includes:
+
+```typescript
+{
+  pubkey: "loan_address",
+  borrower: "your_wallet_address",
+  status: "Active",
+  borrowedAmount: "100000000",      // Amount borrowed
+  collateralAmount: "1000000000",   // Collateral locked
+  principal: "address",             // Principal token
+  collateral: "address",            // Collateral token
+  interest: "10",                   // Interest (10 = 0.1%)
+  duration: 604800,                 // Duration in seconds
+  expiredAt: "2024-03-10T12:00:00Z",
+  liquidation: 80,                  // Liquidation threshold (80%)
+  metadata: {
+    borrowedAmountUsd: "100.00",
+    collateralAmountUsd: "125.00",
+    lender: "lender_address"
+  }
+}
+```
+
+<Warning>
+Monitor your loan expiration dates closely. Expired loans may be liquidated, and you'll lose your collateral.
+</Warning>
+
+## Repaying loans
+
+### Repay with AI agent
+
+Use natural language to repay:
+
+<CodeGroup>
+
+```bash Repay loan
+"Repay my loan"
+```
+
+```bash Repay specific
+"Repay loan [loan_address]"
+```
+
+</CodeGroup>
+
+### Repayment implementation
+
+```typescript
+const rainfiRepayLoanAction: Action = {
+  name: "RAINFI_REPAY_LOAN",
+  description: "Repay a loan from Rainfi",
+  schema: repayLoanRequestSchema,
+  handler: async (agent, input) => {
+    const repayLoanRequest = repayLoanRequestSchema.parse(input);
+    const tx = await RepayLoan(agent, {
+      ...repayLoanRequest,
+      isDefi: true,
+    });
+
+    return {
+      status: "success",
+      message: "Loan repaid successfully",
+      signature: tx.toString(),
+    };
+  },
+};
+```
+
+### Repayment parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `borrower` | string | Yes | Your wallet address |
+| `amountIn` | number | Yes | Repayment amount (lamports) |
+| `loan` | string | Yes | Loan address to repay |
+| `options` | object | Yes | Transaction options |
+
+<Tip>
+Repay loans before expiration to avoid liquidation. You can repay at any time without penalties.
+</Tip>
+
+## Understanding loan parameters
+
+### Interest rates
+
+Interest is calculated based on:
+- Loan duration
+- Pool APR
+- Collateral type
+- Borrowed asset
+- Pool liquidity
+
+```
+Interest amount = Principal × (APR/365) × (Duration in days)
+```
+
+### APR examples
+
+```
+5% APR for 7 days = 0.096% interest
+5% APR for 30 days = 0.41% interest
+5% APR for 365 days = 5% interest
+```
+
+### Liquidation threshold
+
+Liquidation occurs when:
+
+```
+Collateral Value / Borrowed Value < Liquidation Threshold
+```
+
+**Example:**
+```
+Borrow: 100 USDC
+Collateral: 1 SOL (worth $125)
+Threshold: 80%
+
+Safe if: ($125 / $100) × 100 = 125% > 80% ✅
+Liquidation if: SOL drops to < $80 ❌
+```
+
+<Warning>
+Monitor your collateral value, especially during volatile markets. Add more collateral if approaching liquidation threshold.
+</Warning>
+
+## Loan strategies
+
+### Conservative borrowing
+
+```
+Loan-to-Value (LTV): 50-60%
+Buffer: Large safety margin
+Duration: Short-term (7-14 days)
+```
+
+**Best for:**
+- Risk-averse users
+- Volatile market conditions
+- First-time borrowers
+
+### Moderate borrowing
+
+```
+LTV: 60-70%
+Buffer: Moderate safety margin
+Duration: Medium-term (14-30 days)
+```
+
+**Best for:**
+- Regular users
+- Stable market conditions
+- Temporary liquidity needs
+
+### Aggressive borrowing
+
+```
+LTV: 70-80%
+Buffer: Minimal safety margin
+Duration: Any duration
+```
+
+**Best for:**
+- Experienced users
+- Bullish market outlook
+- Leveraged strategies
+
+<Warning>
+Aggressive borrowing carries higher liquidation risk. Only use if you can monitor positions actively and add collateral quickly.
+</Warning>
+
+## Pool conditions
+
+Each lending pool has specific conditions:
+
+```typescript
+interface PoolConditions {
+  minAge: string;              // Minimum collateral token age
+  minLoan: string;             // Minimum loan amount
+  minVolume: string;           // Minimum trading volume
+  liquidationThreshold: number; // Liquidation ratio
+  isEnabled: boolean;          // Pool active status
+  whitelist: string;           // Whitelist address (if any)
+}
+```
+
+### Currency support
+
+Pools support multiple currencies with different parameters:
+
+```typescript
+interface PoolCurrency {
+  currency: number;        // Currency ID
+  currencyLtv: number;     // Loan-to-value ratio
+  exposure: number;        // Pool exposure
+  borrowedAmount: string;  // Total borrowed
+}
+```
+
+<Note>
+Different collateral types have different LTV ratios. Stablecoins typically have higher LTV than volatile assets.
+</Note>
+
+## Fees and costs
+
+### Loan origination
+
+- **Network fee**: ~0.00001 SOL
+- **Priority fee**: Variable (0.00001-0.01 SOL)
+- **Rain protocol fee**: Included in simulation
+- **No origination fee**: RainFi doesn't charge extra fees
+
+### During loan
+
+- **Interest**: Based on APR and duration
+- **No maintenance fees**: Pay only at repayment
+
+### Repayment
+
+- **Principal**: Original borrowed amount
+- **Interest**: Accumulated interest
+- **Network fee**: Transaction fee to repay
+- **No prepayment penalty**: Repay early without penalty
+
+### Example cost breakdown
+
+```
+Borrow: 100 USDC
+Duration: 30 days
+APR: 5%
+
+Interest: 100 × 0.05 × (30/365) = 0.41 USDC
+Rain Fee: 0.01 USDC
+Network Fee: ~0.00001 SOL
+
+Total Repayment: 100.42 USDC + gas
+```
+
+<Tip>
+Interest is calculated from loan origination, not from the requested duration. Repay early to save on interest.
+</Tip>
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Before borrowing">
+    - ✅ Understand loan terms fully
+    - ✅ Check current interest rates
+    - ✅ Calculate liquidation price
+    - ✅ Ensure sufficient repayment funds
+    - ✅ Start with smaller loans to learn
+    - ✅ Monitor market volatility
+  </Accordion>
+  
+  <Accordion title="During loan period">
+    - ✅ Monitor collateral value daily
+    - ✅ Track expiration date
+    - ✅ Keep repayment funds ready
+    - ✅ Watch for liquidation warnings
+    - ✅ Add collateral if needed
+    - ✅ Consider early repayment
+  </Accordion>
+  
+  <Accordion title="Managing risk">
+    - ✅ Maintain healthy LTV ratio
+    - ✅ Use conservative leverage
+    - ✅ Set price alerts
+    - ✅ Have emergency repayment plan
+    - ✅ Don't max out borrowing capacity
+    - ✅ Diversify collateral types
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Quote request failed">
+    Common issues:
+    - Invalid currency addresses
+    - Amount below minimum
+    - Pool liquidity insufficient
+    - Authorization issues
+    
+    **Solutions:**
+    - Verify token addresses
+    - Check minimum loan amounts
+    - Try different pools
+    - Get fresh authorization
+  </Accordion>
+  
+  <Accordion title="Loan transaction failed">
+    Possible causes:
+    - Quote expired (authorization timeout)
+    - Insufficient collateral
+    - Network congestion
+    - Insufficient SOL for fees
+    
+    **Solutions:**
+    - Get new quote immediately
+    - Increase collateral amount
+    - Use higher priority fee
+    - Ensure adequate SOL balance
+  </Accordion>
+  
+  <Accordion title="Cannot repay loan">
+    Issues preventing repayment:
+    - Insufficient repayment token balance
+    - Invalid loan address
+    - Loan already repaid
+    - Network issues
+    
+    **Solutions:**
+    - Check token balance for principal + interest
+    - Verify correct loan address
+    - Check loan status first
+    - Try again with higher fees
+  </Accordion>
+  
+  <Accordion title="Risk of liquidation">
+    If approaching liquidation:
+    1. Monitor collateral ratio closely
+    2. Prepare to add more collateral
+    3. Consider partial repayment
+    4. Have emergency repayment ready
+    
+    **Prevention:**
+    - Use conservative LTV
+    - Set price alerts
+    - Monitor market regularly
+  </Accordion>
+</AccordionGroup>
+
+## Security considerations
+
+- ✅ RainFi is a smart contract protocol - understand the risks
+- ✅ Only borrow what you can afford to repay
+- ✅ Monitor collateral prices during volatile markets
+- ✅ Set calendar reminders for loan expiration
+- ✅ Keep extra funds for emergency repayment
+- ⚠️ Liquidations are automatic and irreversible
+- ⚠️ Price oracles may have delays during extreme volatility
+
+## Related resources
+
+<CardGroup cols={2}>
+  <Card title="Token operations" icon="coins" href="/guides/token-operations">
+    Manage tokens for loan collateral and repayment
+  </Card>
+  <Card title="Swapping tokens" icon="arrow-right-arrow-left" href="/guides/swapping-tokens">
+    Swap to get needed currencies
+  </Card>
+  <Card title="DeFi operations" icon="chart-line" href="/guides/defi-operations">
+    Overview of all DeFi features
+  </Card>
+  <Card title="Staking" icon="layer-group" href="/guides/staking">
+    Use liquid staked tokens as collateral
+  </Card>
+</CardGroup>

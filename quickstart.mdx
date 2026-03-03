@@ -1,80 +1,314 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick start
+description: Get from zero to your first AI-powered transaction in minutes
 ---
 
-## Get started in three steps
+## Get started with Synto Mobile
 
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+This guide will walk you through installing Synto Mobile, connecting your wallet, and having your first conversation with the AI agent.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  **Prerequisites**: You'll need a Solana-compatible mobile wallet installed on your device (like Phantom Mobile, Solflare, or any wallet supporting the Mobile Wallet Adapter protocol).
 </Note>
+
+## Installation
+
+<Steps>
+  <Step title="Install Synto Mobile">
+    Download and install Synto Mobile on your device:
+    
+    <Tabs>
+      <Tab title="Android">
+        1. Download the APK from the [releases page](https://github.com/juiiceee/synto-mobile/releases)
+        2. Enable installation from unknown sources in your device settings
+        3. Open the APK file and follow the installation prompts
+        
+        <Tip>For detailed Android installation steps, see our [installation guide](/installation#android).</Tip>
+      </Tab>
+      
+      <Tab title="iOS">
+        iOS support coming soon! For now, you can run Synto Mobile using Expo Go:
+        
+        1. Install [Expo Go](https://expo.dev/client) from the App Store
+        2. Clone the repository and run `npm start`
+        3. Scan the QR code with your camera app
+        
+        <Tip>See the [installation guide](/installation#ios) for more details.</Tip>
+      </Tab>
+      
+      <Tab title="Development">
+        Running from source for development:
+        
+        ```bash
+        # Clone the repository
+        git clone https://github.com/juiiceee/synto-mobile.git
+        cd synto-mobile
+        
+        # Install dependencies
+        npm install
+        
+        # Start Expo development server
+        npx expo start
+        ```
+        
+        Press **a** for Android or **i** for iOS, or scan the QR code with Expo Go.
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Complete onboarding">
+    When you first launch Synto Mobile, you'll see a three-screen onboarding flow:
+    
+    1. **Welcome screen** - Learn about Synto's AI-powered capabilities
+    2. **Chat with blockchain** - Understand how natural language works
+    3. **Connect & start** - Ready to connect your wallet
+    
+    <img src="/images/onboarding-flow.png" alt="Onboarding screens" />
+    
+    Tap **Connect Wallet** on the final screen to proceed.
+  </Step>
+
+  <Step title="Connect your Solana wallet">
+    Synto uses the Mobile Wallet Adapter to securely connect to your wallet:
+    
+    1. Tap **Connect Wallet** in the onboarding screen
+    2. Select your wallet from the list (Phantom, Solflare, etc.)
+    3. Approve the connection request in your wallet app
+    4. You'll be redirected back to Synto automatically
+    
+    <Warning>
+      Make sure you have a Solana wallet app installed before attempting to connect. If you don't have one, install [Phantom Mobile](https://phantom.app/) or [Solflare](https://solflare.com/).
+    </Warning>
+    
+    Once connected, you'll see the chat interface with your wallet address displayed at the top.
+  </Step>
+
+  <Step title="Send your first message">
+    Now you're ready to interact with Synto! Try one of these starter prompts:
+    
+    <CodeGroup>
+    ```text Check balance
+    What's my SOL balance?
+    ```
+    
+    ```text View portfolio
+    Show me all my tokens
+    ```
+    
+    ```text Get price info
+    What's the current price of BONK?
+    ```
+    
+    ```text Request airdrop (devnet only)
+    Request an airdrop of 1 SOL
+    ```
+    </CodeGroup>
+    
+    Synto will process your request and respond with the information or execute the action.
+    
+    <Tip>
+      Use the **suggestion cards** at the bottom of the chat screen for quick access to common operations!
+    </Tip>
+  </Step>
+
+  <Step title="Try an advanced operation">
+    Once you're comfortable with basic queries, try more advanced DeFi operations:
+    
+    <Tabs>
+      <Tab title="Token swaps">
+        Swap tokens using Jupiter DEX:
+        
+        ```text
+        Swap 10 USDC for SOL
+        ```
+        
+        Synto will:
+        1. Fetch the current exchange rate
+        2. Calculate the expected output
+        3. Request your approval via wallet
+        4. Execute the swap transaction
+      </Tab>
+      
+      <Tab title="Send tokens">
+        Transfer SOL or SPL tokens:
+        
+        ```text
+        Send 0.5 SOL to 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU
+        ```
+        
+        The AI understands token amounts, addresses, and will confirm before sending.
+      </Tab>
+      
+      <Tab title="Staking">
+        Stake your SOL to earn rewards:
+        
+        ```text
+        Stake 5 SOL with Jupiter
+        ```
+        
+        Synto guides you through the staking process and confirms your transaction.
+      </Tab>
+      
+      <Tab title="View history">
+        Access your transaction history:
+        
+        ```text
+        Show my recent transactions
+        ```
+        
+        View all your past transactions with timestamps and status.
+      </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+## Understanding the interface
+
+Synto Mobile has a clean, intuitive interface designed for easy navigation:
+
+### Chat screen
+
+The main interface where you interact with the AI:
+
+- **Header**: Shows current chat title and history button
+- **Message area**: Displays conversation with the AI agent
+- **Suggestion cards**: Quick shortcuts for common operations
+- **Input field**: Type your message or tap suggestions
+- **New chat button**: Start a fresh conversation
+
+### Chat history
+
+Tap the history icon (top left) to:
+- View all your previous conversations
+- Switch between different chat sessions
+- Delete old conversations
+- Create new chat threads
+
+<Note>
+  All chat conversations are stored locally on your device and synced with each message.
+</Note>
+
+## Common use cases
+
+Here are some popular things you can do with Synto:
+
+<AccordionGroup>
+  <Accordion icon="wallet" title="Check your portfolio">
+    ```text
+    What's my portfolio worth?
+    Show me all my token balances
+    What tokens do I own?
+    ```
+  </Accordion>
+  
+  <Accordion icon="paper-plane" title="Send crypto">
+    ```text
+    Send 2 SOL to [wallet address]
+    Transfer 100 USDC to my friend's wallet
+    Send all my BONK tokens to [address]
+    ```
+  </Accordion>
+  
+  <Accordion icon="arrow-right-arrow-left" title="Swap tokens">
+    ```text
+    Swap 50 USDC for SOL
+    Exchange 1 SOL for BONK
+    Trade my USDT for USDC
+    ```
+  </Accordion>
+  
+  <Accordion icon="chart-line" title="Get market data">
+    ```text
+    What's the price of JUP?
+    Show me SOL market data
+    What's BONK trading at?
+    ```
+  </Accordion>
+  
+  <Accordion icon="coins" title="Manage tokens">
+    ```text
+    Close empty token accounts
+    What's my wallet address?
+    Show my token account details
+    ```
+  </Accordion>
+  
+  <Accordion icon="database" title="Staking & DeFi">
+    ```text
+    Stake 10 SOL
+    What are my staking rewards?
+    Show my loans on RainFi
+    Repay my USDC loan
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Tips for better results
+
+<CardGroup cols={2}>
+  <Card icon="message">
+    **Be specific**
+    
+    Instead of "swap tokens," say "swap 10 USDC for SOL" for clearer intent.
+  </Card>
+  
+  <Card icon="spell-check">
+    **Use token symbols**
+    
+    Use standard symbols like SOL, USDC, BONK rather than full token names.
+  </Card>
+  
+  <Card icon="check">
+    **Confirm transactions**
+    
+    Always review transaction details in your wallet before approving.
+  </Card>
+  
+  <Card icon="clock">
+    **Wait for confirmation**
+    
+    Allow time for blockchain confirmation before sending follow-up messages.
+  </Card>
+</CardGroup>
+
+## What's next?
+
+Now that you're up and running, explore more features:
+
+<CardGroup cols={2}>
+  <Card
+    title="AI capabilities"
+    icon="brain"
+    href="/ai-agent/capabilities"
+  >
+    Learn about all the operations the AI agent can perform.
+  </Card>
+  
+  <Card
+    title="Token operations"
+    icon="coins"
+    href="/guides/token-operations"
+  >
+    Deep dive into sending, receiving, and managing tokens.
+  </Card>
+  
+  <Card
+    title="DeFi guide"
+    icon="chart-line"
+    href="/guides/defi-operations"
+  >
+    Explore swapping, staking, and lending features.
+  </Card>
+  
+  <Card
+    title="Mobile Wallet Adapter"
+    icon="link"
+    href="/features/mobile-wallet-adapter"
+  >
+    Understand how secure wallet connection works.
+  </Card>
+</CardGroup>
+
+<Warning>
+  **Security reminder**: Synto never has access to your private keys. All transactions are signed securely through your connected wallet.
+</Warning>

@@ -1,0 +1,422 @@
+---
+title: SolanaAgentKit
+description: Core class for interacting with the Solana blockchain through a plugin-based architecture
+---
+
+## Overview
+
+`SolanaAgentKit` is the main class for building AI agents that interact with the Solana blockchain. It provides a plugin-based architecture that allows you to extend functionality through modular plugins.
+
+The agent manages wallet operations, blockchain connections, and provides a unified interface for executing blockchain actions through plugins.
+
+## Constructor
+
+Creates a new instance of the Solana agent.
+
+```typescript
+new SolanaAgentKit(wallet: BaseWallet, rpc_url: string, config: Config)
+```
+
+<ParamField path="wallet" type="BaseWallet" required>
+  Wallet implementation that provides transaction signing capabilities. Must implement the `BaseWallet` interface with methods for signing transactions and messages.
+  
+  **Required methods:**
+  - `publicKey: PublicKey` - The wallet's public key
+  - `signTransaction()` - Signs a single transaction
+  - `signAllTransactions()` - Signs multiple transactions
+  - `signMessage()` - Signs a message
+  - `signAndSendTransaction()` - Signs and sends a transaction
+  - `sendTransaction()` (optional) - Sends a transaction
+</ParamField>
+
+<ParamField path="rpc_url" type="string" required>
+  Solana RPC endpoint URL for connecting to the blockchain. Use:
+  - Mainnet: `https://api.mainnet-beta.solana.com`
+  - Devnet: `https://api.devnet.solana.com`
+  - Or a custom RPC provider URL
+</ParamField>
+
+<ParamField path="config" type="Config" required>
+  Configuration object for the agent.
+  
+  <Expandable title="Config properties">
+    <ParamField path="signOnly" type="boolean">
+      When `true`, the agent only signs transactions without sending them. Defaults to `false`.
+    </ParamField>
+    
+    <ParamField path="OPENAI_API_KEY" type="string">
+      API key for OpenAI integration.
+    </ParamField>
+    
+    <ParamField path="JUPITER_REFERRAL_ACCOUNT" type="string">
+      Referral account address for Jupiter swaps.
+    </ParamField>
+    
+    <ParamField path="JUPITER_FEE_BPS" type="number">
+      Fee in basis points (BPS) for Jupiter swaps. 1 BPS = 0.01%.
+    </ParamField>
+    
+    <ParamField path="HELIUS_API_KEY" type="string">
+      API key for Helius services.
+    </ParamField>
+    
+    <ParamField path="PRIORITY_LEVEL" type="'medium' | 'high' | 'veryHigh'">
+      Priority fee level for transactions. Higher priority = faster processing but higher fees.
+    </ParamField>
+    
+    <ParamField path="OTHER_API_KEYS" type="Record<string, string>">
+      Additional API keys for other services as key-value pairs.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Example
+
+<CodeGroup>
+```typescript Basic usage
+import { SolanaAgentKit } from '@synto/agent';
+import { PublicKey } from '@solana/web3.js';
+
+const agent = new SolanaAgentKit(
+  {
+    publicKey: new PublicKey('Your...PublicKey'),
+    signTransaction: async (tx) => {
+      // Sign transaction logic
+      return tx;
+    },
+    signAllTransactions: async (txs) => {
+      // Sign multiple transactions
+      return txs;
+    },
+    signMessage: async (message) => {
+      // Sign message logic
+      return message;
+    },
+    signAndSendTransaction: async (tx) => {
+      // Sign and send transaction
+      return { signature: 'tx_signature' };
+    },
+  },
+  'https://api.devnet.solana.com',
+  { signOnly: false }
+);
+```
+
+```typescript With configuration
+import { SolanaAgentKit } from '@synto/agent';
+import { clusterApiUrl } from '@solana/web3.js';
+
+const agent = new SolanaAgentKit(
+  wallet,
+  clusterApiUrl('mainnet-beta'),
+  {
+    signOnly: false,
+    JUPITER_FEE_BPS: 50, // 0.5% fee
+    PRIORITY_LEVEL: 'high',
+    HELIUS_API_KEY: process.env.HELIUS_API_KEY,
+  }
+);
+```
+</CodeGroup>
+
+## Properties
+
+<ResponseField name="connection" type="Connection">
+  Solana blockchain connection instance. Use this to interact directly with the Solana RPC.
+  
+  ```typescript
+  const blockhash = await agent.connection.getLatestBlockhash();
+  const balance = await agent.connection.getBalance(publicKey);
+  ```
+</ResponseField>
+
+<ResponseField name="wallet" type="BaseWallet">
+  The wallet instance used for signing transactions and messages.
+  
+  ```typescript
+  const publicKey = agent.wallet.publicKey;
+  const signedTx = await agent.wallet.signTransaction(transaction);
+  ```
+</ResponseField>
+
+<ResponseField name="config" type="Config">
+  Configuration object containing API keys and settings.
+  
+  ```typescript
+  const isSignOnly = agent.config.signOnly;
+  const jupiterFee = agent.config.JUPITER_FEE_BPS;
+  ```
+</ResponseField>
+
+<ResponseField name="methods" type="TPlugins">
+  Object containing all methods from registered plugins. The type is dynamically inferred based on plugins added via `use()`.
+  
+  ```typescript
+  // After adding plugins, access their methods
+  const balance = await agent.methods.get_balance();
+  const tokenData = await agent.methods.getTokenDataByAddress('mint_address');
+  ```
+</ResponseField>
+
+<ResponseField name="actions" type="Action[]">
+  Array of all registered actions from plugins. Actions define executable operations with schemas and examples.
+  
+  ```typescript
+  // List all available actions
+  const actionNames = agent.actions.map(action => action.name);
+  console.log('Available actions:', actionNames);
+  ```
+</ResponseField>
+
+## Methods
+
+### use()
+
+Adds a plugin to the agent and registers its methods and actions. Returns a new typed instance with the plugin's methods available.
+
+```typescript
+use<P extends Plugin>(plugin: P): SolanaAgentKit<TPlugins & PluginMethods<P>>
+```
+
+<ParamField path="plugin" type="Plugin" required>
+  Plugin object to add to the agent.
+  
+  <Expandable title="Plugin interface">
+    <ParamField path="name" type="string" required>
+      Unique identifier for the plugin.
+    </ParamField>
+    
+    <ParamField path="methods" type="Record<string, any>" required>
+      Object containing callable methods that will be merged into `agent.methods`.
+    </ParamField>
+    
+    <ParamField path="actions" type="Action[]" required>
+      Array of actions that define executable operations with validation schemas.
+    </ParamField>
+    
+    <ParamField path="initialize" type="(agent: SolanaAgentKit) => void" required>
+      Function called when the plugin is registered. Use this to bind methods to the agent instance.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+**Returns:** `SolanaAgentKit` instance with updated types including the plugin's methods.
+
+**Behavior:**
+- If a plugin with the same name is already registered, it returns the existing agent without adding the plugin again
+- Calls the plugin's `initialize()` method with the agent instance
+- Merges plugin methods into `agent.methods`
+- Throws an error if a method name conflicts with an existing method
+- Adds all plugin actions to `agent.actions`
+
+#### Example
+
+<CodeGroup>
+```typescript Adding a plugin
+import TokenPlugin from './plugins/plugin-token';
+import DefiPlugin from './plugins/plugin-defi';
+
+// Add single plugin
+const agentWithToken = agent.use(TokenPlugin);
+
+// Now you can access token methods
+await agentWithToken.methods.get_balance();
+await agentWithToken.methods.transfer(recipient, amount);
+
+// Chain multiple plugins
+const fullAgent = agent
+  .use(TokenPlugin)
+  .use(DefiPlugin);
+
+// Access methods from both plugins
+await fullAgent.methods.trade(inputToken, outputToken, amount);
+await fullAgent.methods.quoteLoanCalculator(collateral);
+```
+
+```typescript Creating a custom plugin
+const customPlugin = {
+  name: "customPlugin",
+  methods: {
+    greet: (agent, name: string) => {
+      console.log(`Hello ${name} from ${agent.wallet.publicKey}`);
+    },
+    getBalance: async (agent) => {
+      const balance = await agent.connection.getBalance(
+        agent.wallet.publicKey
+      );
+      return balance / 1e9; // Convert lamports to SOL
+    },
+  },
+  actions: [
+    {
+      name: "GREET_USER",
+      similes: ["greet", "hello", "say hi"],
+      description: "Greets a user by name",
+      examples: [[
+        {
+          input: { name: "Alice" },
+          output: { message: "Hello Alice" },
+          explanation: "Greets Alice"
+        }
+      ]],
+      schema: z.object({ name: z.string() }),
+      handler: async (agent, input) => {
+        agent.methods.greet(input.name);
+        return { message: `Hello ${input.name}` };
+      },
+    },
+  ],
+  initialize: function(agent) {
+    // Bind methods to the agent instance
+    Object.entries(this.methods).forEach(([name, method]) => {
+      if (typeof method === 'function') {
+        this.methods[name] = method.bind(null, agent);
+      }
+    });
+  },
+};
+
+const agentWithCustom = agent.use(customPlugin);
+await agentWithCustom.methods.greet("Bob");
+```
+</CodeGroup>
+
+## Type definitions
+
+### BaseWallet
+
+Interface for wallet implementations.
+
+```typescript
+interface BaseWallet {
+  readonly publicKey: PublicKey;
+  
+  signTransaction<T extends Transaction | VersionedTransaction>(
+    transaction: T
+  ): Promise<T>;
+  
+  signAllTransactions<T extends Transaction | VersionedTransaction>(
+    transactions: T[]
+  ): Promise<T[]>;
+  
+  sendTransaction?<T extends Transaction | VersionedTransaction>(
+    transaction: T
+  ): Promise<string>;
+  
+  signAndSendTransaction<T extends Transaction | VersionedTransaction>(
+    transaction: T,
+    options?: SendOptions
+  ): Promise<{ signature: TransactionSignature }>;
+  
+  signMessage(message: Uint8Array): Promise<Uint8Array>;
+}
+```
+
+### Plugin
+
+Interface for creating plugins.
+
+```typescript
+interface Plugin {
+  name: string;
+  methods: Record<string, any>;
+  actions: Action[];
+  initialize(agent: SolanaAgentKit): void;
+}
+```
+
+### Action
+
+Interface for defining executable actions with validation.
+
+```typescript
+interface Action {
+  name: string;
+  similes: string[];
+  description: string;
+  examples: ActionExample[][];
+  schema: z.ZodType<any>;
+  handler: (agent: SolanaAgentKit, input: Record<string, any>) => Promise<Record<string, any>>;
+}
+```
+
+### Config
+
+Configuration options for the agent.
+
+```typescript
+interface Config {
+  signOnly?: boolean;
+  OPENAI_API_KEY?: string;
+  PERPLEXITY_API_KEY?: string;
+  JUPITER_REFERRAL_ACCOUNT?: string;
+  JUPITER_FEE_BPS?: number;
+  FLASH_PRIVILEGE?: string;
+  FLEXLEND_API_KEY?: string;
+  HELIUS_API_KEY?: string;
+  PRIORITY_LEVEL?: "medium" | "high" | "veryHigh";
+  PINATA_JWT?: string;
+  PINATA_GATEWAY?: string;
+  OTHER_API_KEYS?: Record<string, string>;
+}
+```
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Plugin organization">
+    Group related functionality into plugins. For example:
+    - Token operations (balance, transfer, swap)
+    - DeFi operations (lending, borrowing, staking)
+    - NFT operations (mint, transfer, list)
+    
+    This keeps your code modular and makes it easier to add or remove features.
+  </Accordion>
+  
+  <Accordion title="Error handling">
+    Always wrap agent operations in try-catch blocks:
+    
+    ```typescript
+    try {
+      const balance = await agent.methods.get_balance();
+      console.log('Balance:', balance);
+    } catch (error) {
+      console.error('Failed to get balance:', error);
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Sign-only mode">
+    Use `signOnly: true` when building transactions that will be sent separately:
+    
+    ```typescript
+    const agent = new SolanaAgentKit(wallet, rpcUrl, { signOnly: true });
+    
+    // Returns signed transaction without sending
+    const signedTx = await agent.methods.transfer(recipient, amount);
+    
+    // Send manually with custom logic
+    const signature = await customSendLogic(signedTx);
+    ```
+  </Accordion>
+  
+  <Accordion title="RPC configuration">
+    Use dedicated RPC providers for production:
+    - Higher rate limits
+    - Better reliability
+    - Advanced features (webhooks, enhanced APIs)
+    
+    Recommended providers: Helius, QuickNode, Alchemy, Triton
+  </Accordion>
+</AccordionGroup>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="agentBuilder" icon="wrench" href="/api/agent-builder">
+    Factory function for creating pre-configured agents
+  </Card>
+  <Card title="Plugins" icon="puzzle-piece" href="/plugins/overview">
+    Available plugins for extending agent functionality
+  </Card>
+</CardGroup>

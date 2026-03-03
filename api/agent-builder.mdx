@@ -1,0 +1,509 @@
+---
+title: agentBuilder
+description: Factory function for creating pre-configured SolanaAgentKit instances with plugins
+---
+
+## Overview
+
+`agentBuilder` is a convenience factory function that creates a fully configured `SolanaAgentKit` instance with built-in plugins. It simplifies agent creation by automatically:
+
+- Setting up the Solana RPC connection
+- Configuring the wallet interface
+- Loading default plugins (TokenPlugin and DefiPlugin)
+- Applying configuration options
+
+This is the recommended way to create agents in Synto Mobile applications.
+
+## Function signature
+
+```typescript
+agentBuilder(fns: FNs, config?: Config): SolanaAgentKit
+```
+
+## Parameters
+
+<ParamField path="fns" type="FNs" required>
+  Object containing wallet function implementations.
+  
+  <Expandable title="FNs properties">
+    <ParamField path="publicKey" type="PublicKey" required>
+      The wallet's public key from `@solana/web3.js`.
+      
+      ```typescript
+      import { PublicKey } from '@solana/web3.js';
+      
+      publicKey: new PublicKey('YourPublicKeyString')
+      ```
+    </ParamField>
+    
+    <ParamField path="signTransaction" type="<T>(transaction: T) => Promise<T>" required>
+      Function that signs a single transaction.
+      
+      - **Generic type:** `T extends Transaction | VersionedTransaction`
+      - **Returns:** Promise resolving to the signed transaction
+      
+      ```typescript
+      signTransaction: async (tx) => {
+        // Use wallet adapter or custom signing logic
+        return await wallet.signTransaction(tx);
+      }
+      ```
+    </ParamField>
+    
+    <ParamField path="signAllTransactions" type="<T>(transactions: T[]) => Promise<T[]>" required>
+      Function that signs multiple transactions in a batch.
+      
+      - **Generic type:** `T extends Transaction | VersionedTransaction`
+      - **Returns:** Promise resolving to array of signed transactions
+      
+      ```typescript
+      signAllTransactions: async (txs) => {
+        return await wallet.signAllTransactions(txs);
+      }
+      ```
+    </ParamField>
+    
+    <ParamField path="signMessage" type="(msg: Uint8Array) => Promise<Uint8Array>" required>
+      Function that signs an arbitrary message.
+      
+      ```typescript
+      signMessage: async (message) => {
+        return await wallet.signMessage(message);
+      }
+      ```
+    </ParamField>
+    
+    <ParamField path="signAndSendTransaction" type="<T>(transaction: T) => Promise<{signature: string}>" required>
+      Function that signs and sends a transaction to the network.
+      
+      - **Generic type:** `T extends Transaction | VersionedTransaction`
+      - **Returns:** Promise resolving to an object with the transaction signature
+      
+      ```typescript
+      signAndSendTransaction: async (tx) => {
+        const signature = await wallet.sendTransaction(tx, connection);
+        return { signature };
+      }
+      ```
+    </ParamField>
+    
+    <ParamField path="sendTransaction" type="<T>(transaction: T) => Promise<string>" required>
+      Function that sends a transaction to the network.
+      
+      - **Generic type:** `T extends Transaction | VersionedTransaction`
+      - **Returns:** Promise resolving to the transaction signature string
+      
+      ```typescript
+      sendTransaction: async (tx) => {
+        const signature = await connection.sendRawTransaction(
+          tx.serialize()
+        );
+        return signature;
+      }
+      ```
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="config" type="Config">
+  Optional configuration object. If not provided, defaults to `{ signOnly: false }`.
+  
+  <Expandable title="Config properties">
+    <ParamField path="signOnly" type="boolean">
+      When `true`, transactions are only signed but not sent. Defaults to `false`.
+    </ParamField>
+    
+    <ParamField path="OPENAI_API_KEY" type="string">
+      API key for OpenAI integration.
+    </ParamField>
+    
+    <ParamField path="JUPITER_REFERRAL_ACCOUNT" type="string">
+      Referral account address for earning fees on Jupiter swaps.
+    </ParamField>
+    
+    <ParamField path="JUPITER_FEE_BPS" type="number">
+      Fee in basis points (BPS) for Jupiter swaps. 100 BPS = 1%.
+    </ParamField>
+    
+    <ParamField path="HELIUS_API_KEY" type="string">
+      API key for Helius RPC and webhook services.
+    </ParamField>
+    
+    <ParamField path="PRIORITY_LEVEL" type="'medium' | 'high' | 'veryHigh'">
+      Transaction priority fee level. Higher priority means faster confirmation.
+    </ParamField>
+    
+    <ParamField path="OTHER_API_KEYS" type="Record<string, string>">
+      Additional API keys for extended services.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Returns
+
+<ResponseField name="agent" type="SolanaAgentKit">
+  Fully configured agent instance with the following plugins pre-loaded:
+  
+  - **TokenPlugin** - Token operations (balance, transfer, swap, staking)
+  - **DefiPlugin** - DeFi operations (lending, borrowing through Rainfi)
+  
+  The agent is ready to use with all plugin methods available via `agent.methods`.
+</ResponseField>
+
+## Built-in plugins
+
+The `agentBuilder` automatically loads these plugins:
+
+<AccordionGroup>
+  <Accordion title="TokenPlugin" icon="coins">
+    Provides token and wallet management capabilities:
+    
+    **Methods:**
+    - `get_balance()` - Get SOL balance
+    - `get_token_balance()` - Get SPL token balance
+    - `transfer()` - Transfer SOL or tokens
+    - `trade()` - Swap tokens via Jupiter
+    - `stakeWithJup()` - Stake tokens with Jupiter
+    - `fetchPrice()` - Get token prices
+    - `getTokenDataByAddress()` - Get token metadata
+    - `getTPS()` - Get current Solana TPS
+    - `closeEmptyTokenAccounts()` - Clean up empty token accounts
+    
+    **Note:** The `LAUNCH_PUMPFUN_TOKEN` action is filtered out for security.
+  </Accordion>
+  
+  <Accordion title="DefiPlugin" icon="chart-line">
+    Provides DeFi protocol integrations:
+    
+    **Methods:**
+    - `quoteLoanCalculator()` - Calculate loan quotes on Rainfi
+    - `RainfiTransactionBuilder()` - Build Rainfi transactions
+    - `GetUserLoans()` - Retrieve user's active loans
+    - `RepayLoan()` - Repay loans on Rainfi
+    
+    Supports lending and borrowing operations through the Rainfi protocol.
+  </Accordion>
+</AccordionGroup>
+
+## Examples
+
+<CodeGroup>
+```typescript React Native with wallet adapter
+import { agentBuilder } from '@synto/agent';
+import { useWallet } from '@solana/wallet-adapter-react';
+
+function MyComponent() {
+  const wallet = useWallet();
+  
+  const agent = agentBuilder(
+    {
+      publicKey: wallet.publicKey!,
+      signTransaction: wallet.signTransaction!,
+      signAllTransactions: wallet.signAllTransactions!,
+      signMessage: wallet.signMessage!,
+      signAndSendTransaction: async (tx) => {
+        const signature = await wallet.sendTransaction(tx, connection);
+        return { signature };
+      },
+      sendTransaction: async (tx) => {
+        return await wallet.sendTransaction(tx, connection);
+      },
+    },
+    {
+      JUPITER_FEE_BPS: 50, // 0.5% referral fee
+      PRIORITY_LEVEL: 'high',
+    }
+  );
+  
+  // Use the agent
+  const balance = await agent.methods.get_balance();
+  
+  return <View>{/* Your UI */}</View>;
+}
+```
+
+```typescript With custom configuration
+import { agentBuilder } from '@synto/agent';
+import { PublicKey } from '@solana/web3.js';
+
+const agent = agentBuilder(
+  {
+    publicKey: new PublicKey(walletAddress),
+    signTransaction: async (tx) => {
+      // Custom signing logic
+      return signedTx;
+    },
+    signAllTransactions: async (txs) => {
+      return signedTxs;
+    },
+    signMessage: async (msg) => {
+      return signedMessage;
+    },
+    signAndSendTransaction: async (tx) => {
+      const signature = await customSend(tx);
+      return { signature };
+    },
+    sendTransaction: async (tx) => {
+      return await customSend(tx);
+    },
+  },
+  {
+    signOnly: false,
+    HELIUS_API_KEY: process.env.HELIUS_KEY,
+    JUPITER_REFERRAL_ACCOUNT: 'Your...ReferralAddress',
+    JUPITER_FEE_BPS: 25,
+    PRIORITY_LEVEL: 'veryHigh',
+  }
+);
+
+// Execute operations
+await agent.methods.trade(
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
+  'So11111111111111111111111111111111111111112', // SOL
+  1000000 // 1 USDC
+);
+```
+
+```typescript Sign-only mode
+import { agentBuilder } from '@synto/agent';
+
+// Create agent that only signs transactions
+const agent = agentBuilder(
+  walletFunctions,
+  { signOnly: true }
+);
+
+// Returns signed transaction without sending
+const signedTx = await agent.methods.transfer(
+  recipientAddress,
+  amount
+);
+
+// Send later with custom logic
+await customBroadcast(signedTx);
+```
+
+```typescript Getting token data
+import { agentBuilder } from '@synto/agent';
+
+const agent = agentBuilder(walletFunctions);
+
+// Get token information
+const tokenData = await agent.methods.getTokenDataByAddress(
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' // USDC
+);
+
+console.log('Token:', tokenData.symbol);
+console.log('Price:', tokenData.price);
+console.log('Liquidity:', tokenData.liquidity);
+
+// Get current price
+const price = await agent.methods.fetchPrice(
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+);
+
+console.log('Current USDC price:', price.priceInUSDC);
+```
+
+```typescript DeFi operations
+import { agentBuilder } from '@synto/agent';
+
+const agent = agentBuilder(walletFunctions);
+
+// Calculate loan quote
+const quote = await agent.methods.quoteLoanCalculator({
+  collateralMint: 'SOL_MINT_ADDRESS',
+  collateralAmount: 10, // 10 SOL
+  borrowMint: 'USDC_MINT_ADDRESS',
+});
+
+console.log('Max borrow:', quote.maxBorrow);
+console.log('Interest rate:', quote.rate);
+
+// Get user's loans
+const loans = await agent.methods.GetUserLoans();
+for (const loan of loans) {
+  console.log('Loan amount:', loan.amount);
+  console.log('Collateral:', loan.collateral);
+  console.log('Interest:', loan.interest);
+}
+```
+</CodeGroup>
+
+## RPC configuration
+
+The `agentBuilder` determines the RPC URL in the following order:
+
+1. **Environment variable:** `process.env.NEXT_PUBLIC_SOLANA_RPC`
+2. **Default fallback:** Devnet cluster URL from `@solana/web3.js`
+
+<Note>
+  For production applications, always set `NEXT_PUBLIC_SOLANA_RPC` to a dedicated RPC provider URL (Helius, QuickNode, etc.) for better performance and reliability.
+</Note>
+
+```bash .env.local
+NEXT_PUBLIC_SOLANA_RPC=https://mainnet.helius-rpc.com/?api-key=YOUR_KEY
+```
+
+## Default agent builder
+
+For testing or development without a connected wallet, use `defaultAgentBuilder`:
+
+```typescript
+import { defaultAgentBuilder } from '@synto/agent';
+
+const agent = defaultAgentBuilder();
+
+// This agent has all plugins loaded but with stub wallet functions
+// Useful for:
+// - Testing UI components
+// - Development without wallet connection
+// - Simulating agent behavior
+```
+
+<Warning>
+  `defaultAgentBuilder()` creates an agent with empty/stub wallet functions. It cannot sign or send real transactions. Only use it for testing and development.
+</Warning>
+
+## Type definitions
+
+### FNs
+
+Wallet function interface for the agent builder.
+
+```typescript
+type FNs = {
+  signAndSendTransaction: <T extends Transaction | VersionedTransaction>(
+    transaction: T
+  ) => Promise<{ signature: TransactionSignature }>;
+  
+  signTransaction: <T extends Transaction | VersionedTransaction>(
+    transaction: T
+  ) => Promise<T>;
+  
+  signMessage: (msg: Uint8Array) => Promise<Uint8Array>;
+  
+  sendTransaction: <T extends Transaction | VersionedTransaction>(
+    transaction: T
+  ) => Promise<string>;
+  
+  signAllTransactions: <T extends Transaction | VersionedTransaction>(
+    transactions: T[]
+  ) => Promise<T[]>;
+  
+  publicKey: PublicKey;
+}
+```
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Wallet integration">
+    Always ensure wallet functions are properly connected before creating the agent:
+    
+    ```typescript
+    if (!wallet.connected || !wallet.publicKey) {
+      throw new Error('Wallet not connected');
+    }
+    
+    const agent = agentBuilder({
+      publicKey: wallet.publicKey,
+      // ... other functions
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Error handling">
+    Wrap agent operations in try-catch blocks:
+    
+    ```typescript
+    try {
+      const result = await agent.methods.transfer(recipient, amount);
+      console.log('Success:', result);
+    } catch (error) {
+      if (error.message.includes('insufficient funds')) {
+        // Handle insufficient balance
+      } else if (error.message.includes('User rejected')) {
+        // Handle user rejection
+      } else {
+        // Handle other errors
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Configuration management">
+    Store sensitive configuration in environment variables:
+    
+    ```typescript
+    const agent = agentBuilder(walletFunctions, {
+      HELIUS_API_KEY: process.env.HELIUS_API_KEY,
+      JUPITER_REFERRAL_ACCOUNT: process.env.JUPITER_REFERRAL,
+      JUPITER_FEE_BPS: Number(process.env.JUPITER_FEE_BPS),
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Performance optimization">
+    Create the agent once and reuse it:
+    
+    ```typescript
+    // In React
+    const agent = useMemo(
+      () => agentBuilder(walletFunctions, config),
+      [wallet.publicKey] // Only recreate when wallet changes
+    );
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Transaction failed: Wallet does not support signAndSendTransaction">
+    Ensure your wallet adapter implements the `signAndSendTransaction` method, or set `signOnly: true` in the config:
+    
+    ```typescript
+    const agent = agentBuilder(walletFunctions, { signOnly: true });
+    ```
+  </Accordion>
+  
+  <Accordion title="Method not found in agent.methods">
+    The method you're trying to use might not be available in the default plugins. Check that the required plugin is loaded:
+    
+    ```typescript
+    // List available methods
+    console.log(Object.keys(agent.methods));
+    
+    // Add custom plugin if needed
+    const extendedAgent = agent.use(customPlugin);
+    ```
+  </Accordion>
+  
+  <Accordion title="RPC rate limit errors">
+    Configure a dedicated RPC provider:
+    
+    ```bash
+    NEXT_PUBLIC_SOLANA_RPC=https://your-dedicated-rpc.com
+    ```
+    
+    Consider using rate limit headers and implementing retry logic.
+  </Accordion>
+</AccordionGroup>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="SolanaAgentKit" icon="robot" href="/api/solana-agent-kit">
+    Core agent class for advanced usage
+  </Card>
+  <Card title="Plugins" icon="puzzle-piece" href="/plugins/overview">
+    Available plugins and custom plugin development
+  </Card>
+  <Card title="Wallet integration" icon="wallet" href="/guides/wallet-setup">
+    Guide to setting up wallet connections
+  </Card>
+  <Card title="Actions" icon="bolt" href="/api/actions">
+    Working with agent actions
+  </Card>
+</CardGroup>

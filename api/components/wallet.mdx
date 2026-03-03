@@ -1,0 +1,444 @@
+---
+title: Wallet components
+description: Solana wallet integration components for mobile wallet adapter and connection management
+---
+
+The wallet components provide a complete Solana wallet integration using the mobile wallet adapter protocol with beautiful UI components.
+
+## Provider components
+
+### SolanaProvider
+
+Provides Solana connection context to all child components.
+
+<ParamField path="children" type="ReactNode" required>
+  Child components that need access to the Solana connection.
+</ParamField>
+
+<ParamField path="config" type="ConnectionConfig">
+  Connection configuration options. Defaults to `{ commitment: "confirmed" }`.
+</ParamField>
+
+<CodeGroup>
+```tsx SolanaProvider example
+import { SolanaProvider } from "@/components/solana/solana-provider";
+
+export default function App() {
+  return (
+    <SolanaProvider config={{ commitment: "confirmed" }}>
+      <YourApp />
+    </SolanaProvider>
+  );
+}
+```
+
+```tsx Custom commitment
+<SolanaProvider config={{ commitment: "finalized" }}>
+  <YourApp />
+</SolanaProvider>
+```
+</CodeGroup>
+
+<Note>
+  The connection automatically uses the cluster endpoint from `useCluster()` context.
+</Note>
+
+## UI components
+
+### WalletUiButtonConnect
+
+Gradient button that triggers wallet connection flow.
+
+<ParamField path="label" type="string">
+  Button text. Defaults to "Connect".
+</ParamField>
+
+<CodeGroup>
+```tsx WalletUiButtonConnect example
+import { WalletUiButtonConnect } from "@/components/solana/wallet-ui-button-connect";
+
+export function WalletScreen() {
+  return <WalletUiButtonConnect label="Connect Wallet" />;
+}
+```
+
+```tsx Default label
+<WalletUiButtonConnect />
+// Renders "Connect"
+```
+</CodeGroup>
+
+### WalletUiButtonDisconnect
+
+Gradient button that disconnects the current wallet.
+
+<ParamField path="label" type="string">
+  Button text. Defaults to "Disconnect".
+</ParamField>
+
+<CodeGroup>
+```tsx WalletUiButtonDisconnect example
+import { WalletUiButtonDisconnect } from "@/components/solana/wallet-ui-button-disconnect";
+
+export function WalletSettings() {
+  return <WalletUiButtonDisconnect label="Sign Out" />;
+}
+```
+</CodeGroup>
+
+### WalletUiDropdown
+
+Dropdown menu displaying connected wallet address with copy, view in explorer, and disconnect actions.
+
+<CodeGroup>
+```tsx WalletUiDropdown example
+import { WalletUiDropdown } from "@/components/solana/wallet-ui-dropdown";
+
+export function Header() {
+  return (
+    <View style={{ flexDirection: "row", justifyContent: "flex-end" }}>
+      <WalletUiDropdown />
+    </View>
+  );
+}
+```
+</CodeGroup>
+
+<Note>
+  Automatically displays `WalletUiButtonConnect` when no wallet is connected.
+</Note>
+
+<Accordion title="Dropdown menu actions">
+  - **Copy Address**: Copies wallet public key to clipboard
+  - **View in Explorer**: Opens Solana Explorer in browser
+  - **Disconnect**: Signs out and deauthorizes wallet
+</Accordion>
+
+### BaseButton
+
+Reusable gradient button component used by wallet UI components.
+
+<ParamField path="label" type="string" required>
+  Button text to display.
+</ParamField>
+
+<ParamField path="onPress" type="function">
+  Callback when button is pressed.
+</ParamField>
+
+<CodeGroup>
+```tsx BaseButton example
+import { BaseButton } from "@/components/solana/base-button";
+
+export function CustomAction() {
+  return (
+    <BaseButton
+      label="Sign Message"
+      onPress={() => console.log("Signing...")}
+    />
+  );
+}
+```
+</CodeGroup>
+
+<Note>
+  BaseButton features a purple gradient (`#6366f1` → `#8b5cf6` → `#a855f7`) with shadow effects and glow border.
+</Note>
+
+## Hooks
+
+### useWalletUi
+
+Main hook for wallet interactions.
+
+<ResponseField name="account" type="AuthorizedWallet | null">
+  Currently connected wallet account with `publicKey` property.
+</ResponseField>
+
+<ResponseField name="connect" type="function">
+  Opens wallet selection and connection flow.
+</ResponseField>
+
+<ResponseField name="disconnect" type="function">
+  Signs out and deauthorizes current wallet.
+</ResponseField>
+
+<ResponseField name="signAndSendTransaction" type="function">
+  Signs and sends a transaction. Signature: `(transaction: Transaction, minContextSlot?: number) => Promise<string>`
+</ResponseField>
+
+<ResponseField name="signIn" type="function">
+  Triggers Sign In With Solana (SIWS) flow.
+</ResponseField>
+
+<ResponseField name="signMessage" type="function">
+  Signs an arbitrary message. Signature: `(message: Uint8Array) => Promise<Uint8Array>`
+</ResponseField>
+
+<CodeGroup>
+```tsx useWalletUi example
+import { useWalletUi } from "@/components/solana/use-wallet-ui";
+
+export function WalletInfo() {
+  const { account, connect, disconnect } = useWalletUi();
+
+  if (!account) {
+    return <Button onPress={connect}>Connect</Button>;
+  }
+
+  return (
+    <View>
+      <Text>{account.publicKey.toString()}</Text>
+      <Button onPress={disconnect}>Disconnect</Button>
+    </View>
+  );
+}
+```
+
+```tsx Signing transaction
+const { signAndSendTransaction } = useWalletUi();
+
+const sendTransaction = async (transaction: Transaction) => {
+  try {
+    const signature = await signAndSendTransaction(transaction);
+    console.log("Transaction sent:", signature);
+  } catch (error) {
+    console.error("Transaction failed:", error);
+  }
+};
+```
+
+```tsx Signing message
+const { signMessage } = useWalletUi();
+
+const sign = async () => {
+  const message = new TextEncoder().encode("Hello Solana!");
+  const signature = await signMessage(message);
+  console.log("Signature:", signature);
+};
+```
+</CodeGroup>
+
+### useSolana
+
+Accesses the Solana connection context.
+
+<ResponseField name="connection" type="Connection">
+  Active Solana RPC connection instance.
+</ResponseField>
+
+<CodeGroup>
+```tsx useSolana example
+import { useSolana } from "@/components/solana/solana-provider";
+
+export function useBalance() {
+  const { connection } = useSolana();
+  const { account } = useWalletUi();
+
+  const getBalance = async () => {
+    if (!account) return;
+    const balance = await connection.getBalance(account.publicKey);
+    return balance / LAMPORTS_PER_SOL;
+  };
+
+  return { getBalance };
+}
+```
+</CodeGroup>
+
+### useConnection
+
+Direct access to the Solana connection (convenience hook).
+
+<CodeGroup>
+```tsx useConnection example
+import { useConnection } from "@/components/solana/solana-provider";
+
+export function AccountData() {
+  const connection = useConnection();
+
+  const fetchAccountInfo = async (address: PublicKey) => {
+    const info = await connection.getAccountInfo(address);
+    return info;
+  };
+
+  return { fetchAccountInfo };
+}
+```
+</CodeGroup>
+
+### useMobileWallet
+
+Low-level mobile wallet adapter integration.
+
+<ResponseField name="connect" type="function">
+  Initiates wallet connection flow.
+</ResponseField>
+
+<ResponseField name="signAndSendTransaction" type="function">
+  Signs and sends transactions through mobile wallet.
+</ResponseField>
+
+<ResponseField name="signMessage" type="function">
+  Signs messages through mobile wallet.
+</ResponseField>
+
+<ResponseField name="signIn" type="function">
+  Performs Sign In With Solana authentication.
+</ResponseField>
+
+<CodeGroup>
+```tsx useMobileWallet example
+import { useMobileWallet } from "@/components/solana/use-mobile-wallet";
+
+export function CustomWalletButton() {
+  const { connect } = useMobileWallet();
+
+  return (
+    <Button onPress={() => connect()}>Connect Mobile Wallet</Button>
+  );
+}
+```
+</CodeGroup>
+
+<Note>
+  Most apps should use `useWalletUi()` instead, which wraps `useMobileWallet()` with auth context.
+</Note>
+
+### useAuthorization
+
+Manages wallet authorization state.
+
+<ResponseField name="selectedAccount" type="AuthorizedWallet | null">
+  Currently authorized wallet account.
+</ResponseField>
+
+<CodeGroup>
+```tsx useAuthorization example
+import { useAuthorization } from "@/components/solana/use-authorization";
+
+export function AccountStatus() {
+  const { selectedAccount } = useAuthorization();
+
+  return (
+    <Text>
+      {selectedAccount
+        ? `Connected: ${selectedAccount.publicKey}`
+        : "Not connected"}
+    </Text>
+  );
+}
+```
+</CodeGroup>
+
+### useWalletUiTheme
+
+Provides theme colors for wallet UI components.
+
+<ResponseField name="backgroundColor" type="string">
+  Background color for wallet UI elements.
+</ResponseField>
+
+<ResponseField name="borderColor" type="string">
+  Border color for wallet UI elements.
+</ResponseField>
+
+<ResponseField name="textColor" type="string">
+  Text color for wallet UI elements.
+</ResponseField>
+
+<CodeGroup>
+```tsx useWalletUiTheme example
+import { useWalletUiTheme } from "@/components/solana/use-wallet-ui-theme";
+
+export function ThemedButton() {
+  const { backgroundColor, textColor } = useWalletUiTheme();
+
+  return (
+    <View style={{ backgroundColor }}>
+      <Text style={{ color: textColor }}>Themed Content</Text>
+    </View>
+  );
+}
+```
+</CodeGroup>
+
+## Type definitions
+
+<Tabs>
+  <Tab title="SolanaProviderProps">
+    ```tsx
+    interface SolanaProviderProps {
+      children: ReactNode;
+      config?: ConnectionConfig;
+    }
+
+    interface ConnectionConfig {
+      commitment?: Commitment;
+      wsEndpoint?: string;
+      httpHeaders?: Record<string, string>;
+      fetch?: FetchFn;
+    }
+    ```
+  </Tab>
+  <Tab title="AuthorizedWallet">
+    ```tsx
+    interface AuthorizedWallet {
+      publicKey: PublicKey;
+      // Additional properties from mobile wallet adapter
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Complete example
+
+<CodeGroup>
+```tsx Full wallet integration
+import { SolanaProvider } from "@/components/solana/solana-provider";
+import { WalletUiDropdown } from "@/components/solana/wallet-ui-dropdown";
+import { useWalletUi } from "@/components/solana/use-wallet-ui";
+import { View, Text } from "react-native";
+
+function WalletContent() {
+  const { account, signMessage } = useWalletUi();
+
+  const handleSign = async () => {
+    const message = new TextEncoder().encode("Hello!");
+    const signature = await signMessage(message);
+    console.log("Signed:", signature);
+  };
+
+  return (
+    <View>
+      <WalletUiDropdown />
+      {account && (
+        <View>
+          <Text>Connected: {account.publicKey.toString()}</Text>
+          <Button onPress={handleSign}>Sign Message</Button>
+        </View>
+      )}
+    </View>
+  );
+}
+
+export default function App() {
+  return (
+    <SolanaProvider>
+      <WalletContent />
+    </SolanaProvider>
+  );
+}
+```
+</CodeGroup>
+
+## Related components
+
+<CardGroup cols={2}>
+  <Card title="Account components" icon="wallet" href="/api/components/account">
+    Balance, token accounts, and transaction components
+  </Card>
+  <Card title="Cluster provider" icon="server" href="/api/providers/cluster">
+    Network and RPC endpoint management
+  </Card>
+</CardGroup>

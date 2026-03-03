@@ -1,0 +1,270 @@
+---
+title: Token operations
+description: Learn how to send, receive, and manage tokens in Synto Mobile
+---
+
+Synto Mobile provides comprehensive token management capabilities for Solana tokens and SOL. This guide covers sending, receiving, and managing your digital assets.
+
+## Viewing your tokens
+
+Your token balances are displayed on the main account screen. Synto Mobile shows:
+
+- **SOL Balance**: Your native SOL balance
+- **Token Accounts**: All SPL tokens you hold with their balances
+- **Token Details**: Mint address, balance, and public key for each token
+
+<Note>
+Token amounts are automatically converted from their smallest unit (lamports for SOL) to the human-readable format based on the token's decimals.
+</Note>
+
+## Sending tokens
+
+<Steps>
+  <Step title="Navigate to Send">
+    Open your wallet and tap the "Send" button to access the transfer interface.
+  </Step>
+  
+  <Step title="Enter transfer details">
+    Fill in the required information:
+    - **Amount**: The number of tokens to send
+    - **Destination Address**: The recipient's wallet address (must be a valid Solana address)
+  </Step>
+  
+  <Step title="Confirm and send">
+    Review the transaction details and tap "Send SOL" to execute the transfer. The transaction will be signed and submitted to the network.
+  </Step>
+</Steps>
+
+### Transfer implementation
+
+Synto uses the following transfer flow:
+
+```typescript
+// Transfer SOL
+await transferSol.mutateAsync({
+  amount: parseFloat(amount),
+  destination: new PublicKey(destinationAddress),
+});
+```
+
+<Tip>
+For SOL transfers, ensure you maintain at least 0.001 SOL in your wallet to cover transaction fees.
+</Tip>
+
+### Transfer via AI agent
+
+You can also transfer tokens using natural language commands with the AI agent:
+
+<CodeGroup>
+
+```bash Example: Send SOL
+"Send 1 SOL to 8x2dR8Mpzuz2YqyZyZjUbYWKSWesBo5jMx2Q9Y86udVk"
+```
+
+```bash Example: Send tokens
+"Transfer 100 USDC to 8x2dR8Mpzuz2YqyZyZjUbYWKSWesBo5jMx2Q9Y86udVk"
+```
+
+</CodeGroup>
+
+The AI agent supports these transfer commands:
+- "send tokens"
+- "transfer funds"
+- "send money"
+- "send sol"
+- "transfer tokens"
+
+### Transfer parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `to` | string | Yes | Recipient's Solana address (minimum 32 characters) |
+| `amount` | number | Yes | Amount to transfer (must be positive) |
+| `mint` | string | No | Token mint address (omit for SOL transfers) |
+
+<Warning>
+Always double-check the recipient address before confirming a transfer. Blockchain transactions are irreversible.
+</Warning>
+
+## Receiving tokens
+
+To receive tokens or SOL, you need to share your wallet address with the sender.
+
+<Steps>
+  <Step title="Access receive screen">
+    Navigate to the "Receive" section in your wallet.
+  </Step>
+  
+  <Step title="Share your address">
+    Your wallet address is displayed with multiple sharing options:
+    - **Copy Address**: Tap to copy your address to clipboard
+    - **QR Code**: Show the QR code for easy scanning
+  </Step>
+  
+  <Step title="Wait for confirmation">
+    Once the sender completes the transfer, the tokens will appear in your wallet after the transaction is confirmed on the Solana network.
+  </Step>
+</Steps>
+
+### Receive screen implementation
+
+```tsx
+export function AccountFeatureReceive({ address }: { address: PublicKey }) {
+  return (
+    <AppView style={{ gap: 16 }}>
+      <AppText type="subtitle">Send assets to this address:</AppText>
+      <AppView style={{ alignItems: "center", gap: 16 }}>
+        <AppText type="defaultSemiBold" style={{ textAlign: "center" }}>
+          {address.toString()}
+        </AppText>
+        <Button onPressIn={() => Clipboard.setString(address.toString())}>
+          Copy Address
+        </Button>
+        <AppQrCode value={address.toString()} />
+      </AppView>
+    </AppView>
+  );
+}
+```
+
+<Tip>
+Share your QR code for quick and error-free address sharing, especially for in-person transactions.
+</Tip>
+
+## Checking token prices
+
+Synto Mobile integrates with Jupiter to provide real-time token pricing.
+
+### Get token price
+
+Use the AI agent to check current token prices:
+
+<CodeGroup>
+
+```bash Example: Check SOL price
+"Get token price for So11111111111111111111111111111111111111112"
+```
+
+```bash Example: Check price
+"What's the current price of SOL?"
+```
+
+</CodeGroup>
+
+Supported price check commands:
+- "get token price"
+- "check price"
+- "token value"
+- "price check"
+- "get price in usd"
+
+### Price API response
+
+```json
+{
+  "status": "success",
+  "price": "23.45",
+  "message": "Current price: $23.45 USDC"
+}
+```
+
+## Managing token accounts
+
+### View all token accounts
+
+Your token accounts are displayed in a table format showing:
+- Public key (address of the token account)
+- Mint address (the token type)
+- Balance (current token amount)
+
+### Close empty token accounts
+
+You can reclaim rent from empty token accounts using the AI agent:
+
+```bash
+"Close empty token accounts"
+```
+
+This command will:
+1. Scan your wallet for token accounts with zero balance
+2. Close those accounts
+3. Return the rent (SOL) to your wallet
+
+<Note>
+Each token account on Solana requires rent (approximately 0.00203928 SOL). Closing unused accounts helps you reclaim this SOL.
+</Note>
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Security">
+    - Never share your private key or seed phrase
+    - Always verify recipient addresses before sending
+    - Use QR codes to minimize address entry errors
+    - Keep a small amount of SOL for transaction fees
+  </Accordion>
+  
+  <Accordion title="Transaction fees">
+    - Maintain at least 0.001 SOL for transaction fees
+    - Fees are paid in SOL, even for token transfers
+    - Consider network congestion when timing transactions
+  </Accordion>
+  
+  <Accordion title="Token management">
+    - Regularly close unused token accounts to reclaim rent
+    - Monitor token balances after transactions
+    - Keep track of token mint addresses for verification
+  </Accordion>
+</AccordionGroup>
+
+## Transaction states
+
+Understand the different states of your transactions:
+
+| State | Description |
+|-------|-------------|
+| Pending | Transaction submitted, waiting for confirmation |
+| Confirmed | Transaction confirmed by the network |
+| Failed | Transaction failed (funds returned to sender) |
+| Processing | Transaction being processed by validators |
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Transaction failed">
+    Common reasons:
+    - Insufficient SOL for transaction fees
+    - Invalid recipient address
+    - Insufficient token balance
+    - Network congestion
+    
+    **Solution**: Check your balance, verify the address, and try again.
+  </Accordion>
+  
+  <Accordion title="Tokens not appearing">
+    If received tokens don't appear:
+    1. Check the transaction on a block explorer
+    2. Verify the correct network (Solana mainnet)
+    3. Refresh your wallet
+    4. Ensure sufficient time for confirmation
+  </Accordion>
+  
+  <Accordion title="Cannot send tokens">
+    If you can't send tokens:
+    - Verify you have sufficient SOL for fees
+    - Check that you have the token balance
+    - Ensure the destination address is valid
+    - Try a smaller amount first
+  </Accordion>
+</AccordionGroup>
+
+## Related resources
+
+<CardGroup cols={2}>
+  <Card title="Swapping tokens" icon="arrow-right-arrow-left" href="/guides/swapping-tokens">
+    Learn how to swap tokens using Jupiter Exchange
+  </Card>
+  <Card title="DeFi operations" icon="coins" href="/guides/defi-operations">
+    Explore DeFi features in Synto Mobile
+  </Card>
+</CardGroup>

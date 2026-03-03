@@ -1,0 +1,176 @@
+---
+title: "Token plugin overview"
+description: "Comprehensive token operations for Solana blockchain transactions, balances, and integrations"
+---
+
+The Token Plugin provides a complete suite of tools for managing Solana tokens, including SOL and SPL tokens. It integrates with Jupiter Exchange for swaps and staking, DEXScreener for token data, and provides robust balance checking and transfer capabilities.
+
+## Plugin structure
+
+The Token Plugin is organized into three main modules:
+
+<CardGroup cols={3}>
+  <Card title="Solana tools" icon="coins" href="#solana-operations">
+    Core wallet and token operations
+  </Card>
+  <Card title="Jupiter tools" icon="arrow-right-arrow-left" href="#jupiter-integration">
+    Token swaps and liquid staking
+  </Card>
+  <Card title="DEXScreener tools" icon="chart-line">
+    Token data and price information
+  </Card>
+</CardGroup>
+
+## Installation
+
+The Token Plugin is included by default in Synto Mobile. It's automatically initialized with the agent:
+
+```typescript
+import TokenPlugin from '@/utils/syntoUtils/agent/plugins/plugin-token';
+
+// Plugin is registered automatically
+const agent = new SolanaAgentKit({
+  plugins: [TokenPlugin]
+});
+```
+
+## Available methods
+
+The Token Plugin exposes the following methods through the agent:
+
+### Solana operations
+
+<ResponseField name="get_balance" type="function">
+  Get the balance of SOL or SPL tokens for the agent's wallet
+</ResponseField>
+
+<ResponseField name="get_balance_other" type="function">
+  Get the balance of any wallet address (not just the agent's)
+</ResponseField>
+
+<ResponseField name="get_token_balance" type="function">
+  Get detailed token balances including names, symbols, and decimals
+</ResponseField>
+
+<ResponseField name="transfer" type="function">
+  Transfer SOL or SPL tokens to a recipient
+</ResponseField>
+
+<ResponseField name="getWalletAddress" type="function">
+  Get the agent's wallet address as a base58 string
+</ResponseField>
+
+<ResponseField name="request_faucet_funds" type="function">
+  Request SOL from faucet (devnet/testnet only)
+</ResponseField>
+
+<ResponseField name="getTPS" type="function">
+  Get current Solana network transactions per second
+</ResponseField>
+
+<ResponseField name="closeEmptyTokenAccounts" type="function">
+  Close empty SPL token accounts to reclaim rent
+</ResponseField>
+
+### Jupiter integration
+
+<ResponseField name="trade" type="function">
+  Swap tokens using Jupiter Exchange aggregator
+</ResponseField>
+
+<ResponseField name="stakeWithJup" type="function">
+  Stake SOL with Jupiter to receive jupSOL liquid staking tokens
+</ResponseField>
+
+<ResponseField name="fetchPrice" type="function">
+  Fetch token price in USDC from Jupiter API
+</ResponseField>
+
+### DEXScreener integration
+
+<ResponseField name="getTokenDataByAddress" type="function">
+  Get comprehensive token data from DEXScreener by mint address
+</ResponseField>
+
+<ResponseField name="getTokenAddressFromTicker" type="function">
+  Look up token mint address from ticker symbol
+</ResponseField>
+
+## Quick examples
+
+### Check SOL balance
+
+```typescript
+import { get_balance } from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/tools';
+
+const balance = await get_balance(agent);
+console.log(`Balance: ${balance} SOL`);
+```
+
+### Transfer tokens
+
+```typescript
+import { transfer } from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/tools';
+import { PublicKey } from '@solana/web3.js';
+
+const recipient = new PublicKey('8x2dR8Mpzuz2YqyZyZjUbYWKSWesBo5jMx2Q9Y86udVk');
+const signature = await transfer(agent, recipient, 1.5);
+console.log(`Transfer complete: ${signature}`);
+```
+
+### Swap tokens
+
+```typescript
+import { trade } from '@/utils/syntoUtils/agent/plugins/plugin-token/jupiter/tools';
+import { PublicKey } from '@solana/web3.js';
+import { TOKENS } from '@/utils/syntoUtils/agent/plugins/plugin-token/jupiter/tools/utils/constants';
+
+// Swap 10 USDC for SOL
+const outputMint = TOKENS.SOL;
+const inputMint = TOKENS.USDC;
+const signature = await trade(agent, outputMint, 10, inputMint);
+```
+
+## Actions
+
+The plugin includes AI-friendly actions that can be triggered by natural language:
+
+- **BALANCE_ACTION**: Check wallet and token balances
+- **TRANSFER**: Send SOL or SPL tokens
+- **TRADE**: Swap tokens using Jupiter
+- **STAKE_WITH_JUPITER**: Stake SOL for jupSOL
+- **FETCH_PRICE**: Get token prices
+- **GET_TOKEN_DATA**: Fetch token information from DEXScreener
+
+<Info>
+  Actions are automatically registered when the plugin initializes and can be invoked through the agent's natural language interface.
+</Info>
+
+## Error handling
+
+All Token Plugin functions throw descriptive errors that can be caught and handled:
+
+```typescript
+try {
+  const signature = await transfer(agent, recipient, amount, mint);
+} catch (error) {
+  console.error(`Transfer failed: ${error.message}`);
+}
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Balance operations" icon="scale-balanced" href="/api/token/balance-operations">
+    Learn about checking and managing token balances
+  </Card>
+  <Card title="Transfer functions" icon="paper-plane" href="/api/token/transfer">
+    Transfer SOL and SPL tokens
+  </Card>
+  <Card title="Jupiter integration" icon="arrow-right-arrow-left" href="/api/token/jupiter-integration">
+    Swap and stake with Jupiter Exchange
+  </Card>
+  <Card title="DeFi plugin" icon="building-columns" href="/api/defi/overview">
+    Explore DeFi lending and borrowing
+  </Card>
+</CardGroup>

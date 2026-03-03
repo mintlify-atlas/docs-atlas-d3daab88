@@ -1,0 +1,392 @@
+---
+title: "Transfer functions"
+description: "Send SOL and SPL tokens to any Solana wallet address"
+---
+
+The Token Plugin provides robust transfer capabilities for both native SOL and SPL tokens, with automatic associated token account creation and proper decimal handling.
+
+## transfer
+
+Transfer SOL or SPL tokens to a recipient's wallet address.
+
+### Function signature
+
+```typescript
+function transfer(
+  agent: SolanaAgentKit,
+  to: PublicKey,
+  amount: number,
+  mint?: PublicKey
+): Promise<string | Transaction>
+```
+
+### Parameters
+
+<ParamField path="agent" type="SolanaAgentKit" required>
+  The agent instance containing wallet credentials and connection
+</ParamField>
+
+<ParamField path="to" type="PublicKey" required>
+  The recipient's wallet address
+</ParamField>
+
+<ParamField path="amount" type="number" required>
+  Amount to transfer in UI units (e.g., 1.5 for 1.5 SOL, not lamports)
+</ParamField>
+
+<ParamField path="mint" type="PublicKey" optional>
+  Optional SPL token mint address. If not provided, transfers native SOL
+</ParamField>
+
+### Returns
+
+<ResponseField name="signature" type="string">
+  Transaction signature if the transaction was sent to the network
+</ResponseField>
+
+<ResponseField name="transaction" type="Transaction">
+  Signed transaction object if agent is in `signOnly` mode
+</ResponseField>
+
+### Example usage
+
+<CodeGroup>
+```typescript Transfer SOL
+import { transfer } from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/tools';
+import { PublicKey } from '@solana/web3.js';
+
+const recipient = new PublicKey('8x2dR8Mpzuz2YqyZyZjUbYWKSWesBo5jMx2Q9Y86udVk');
+const signature = await transfer(agent, recipient, 1.5);
+
+console.log(`Transferred 1.5 SOL`);
+console.log(`Transaction: https://solscan.io/tx/${signature}`);
+```
+
+```typescript Transfer SPL tokens
+import { transfer } from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/tools';
+import { PublicKey } from '@solana/web3.js';
+
+const recipient = new PublicKey('8x2dR8Mpzuz2YqyZyZjUbYWKSWesBo5jMx2Q9Y86udVk');
+const usdcMint = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+
+const signature = await transfer(agent, recipient, 100, usdcMint);
+console.log(`Transferred 100 USDC`);
+```
+
+```typescript Using the action handler
+import transferAction from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/actions/transfer';
+
+const result = await transferAction.handler(agent, {
+  to: '8x2dR8Mpzuz2YqyZyZjUbYWKSWesBo5jMx2Q9Y86udVk',
+  amount: 1,
+  mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
+});
+
+console.log(result);
+// Output:
+// {
+//   status: 'success',
+//   message: 'Transfer completed successfully',
+//   amount: 1,
+//   recipient: '8x2dR8Mpzuz2YqyZyZjUbYWKSWesBo5jMx2Q9Y86udVk',
+//   token: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+//   transaction: '5UfgJ5vVZxUxefDGqzqkVLHzHxVTyYH9...'
+// }
+```
+</CodeGroup>
+
+## How it works
+
+The transfer function handles both SOL and SPL token transfers with different logic:
+
+### SOL transfers
+
+For native SOL transfers, the function:
+
+1. Creates a `SystemProgram.transfer` instruction
+2. Converts the amount from SOL to lamports (`amount * LAMPORTS_PER_SOL`)
+3. Signs and sends the transaction
+
+```typescript
+const transaction = new Transaction().add(
+  SystemProgram.transfer({
+    fromPubkey: agent.wallet.publicKey,
+    toPubkey: to,
+    lamports: amount * LAMPORTS_PER_SOL,
+  })
+);
+```
+
+### SPL token transfers
+
+For SPL token transfers, the function:
+
+1. Derives the sender's associated token account (ATA)
+2. Derives the recipient's ATA
+3. **Automatically creates the recipient's ATA if it doesn't exist**
+4. Fetches the token's decimal places from the mint
+5. Adjusts the amount based on decimals
+6. Creates a transfer instruction
+7. Signs and sends the transaction
+
+```typescript
+const fromAta = await getAssociatedTokenAddress(mint, agent.wallet.publicKey);
+const toAta = await getAssociatedTokenAddress(mint, to);
+
+// Create recipient's ATA if needed
+try {
+  await getAccount(agent.connection, toAta);
+} catch {
+  transaction.add(
+    createAssociatedTokenAccountInstruction(
+      agent.wallet.publicKey,
+      toAta,
+      to,
+      mint
+    )
+  );
+}
+
+// Adjust amount for decimals
+const mintInfo = await getMint(agent.connection, mint);
+const adjustedAmount = amount * Math.pow(10, mintInfo.decimals);
+```
+
+<Info>
+  The function automatically handles ATA creation, so you don't need to check if the recipient has an existing token account.
+</Info>
+
+## Transfer action
+
+The Transfer action enables AI-driven natural language transfers. It's registered with these triggers:
+
+<ResponseField name="similes" type="string[]">
+  - "send tokens"
+  - "transfer funds"
+  - "send money"
+  - "send sol"
+  - "transfer tokens"
+</ResponseField>
+
+### Action schema
+
+The action validates inputs using Zod:
+
+```typescript
+schema: z.object({
+  to: z.string().min(32, "Invalid Solana address"),
+  amount: z.number().positive("Amount must be positive"),
+  mint: z.string().optional(),
+})
+```
+
+### Natural language examples
+
+With the action registered, users can say:
+
+- "Send 5 SOL to 8x2dR8Mpzuz2YqyZyZjUbYWKSWesBo5jMx2Q9Y86udVk"
+- "Transfer 100 USDC to my friend"
+- "Send money to this address"
+
+## Error handling
+
+The transfer function throws descriptive errors:
+
+```typescript
+try {
+  const signature = await transfer(agent, recipient, amount, mint);
+  console.log('Transfer successful:', signature);
+} catch (error) {
+  console.error(`Transfer failed: ${error.message}`);
+  // Common errors:
+  // - Insufficient balance
+  // - Invalid recipient address
+  // - Network connection issues
+  // - Token account doesn't exist (for sender)
+}
+```
+
+<Warning>
+  Always verify the sender has sufficient balance before attempting a transfer to provide better user feedback.
+</Warning>
+
+## Additional utilities
+
+### closeEmptyTokenAccounts
+
+Close empty SPL token accounts to reclaim rent (≈0.00203928 SOL per account).
+
+```typescript
+import { closeEmptyTokenAccounts } from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/tools';
+
+const result = await closeEmptyTokenAccounts(agent);
+
+if (result.size > 0) {
+  console.log(`Closed ${result.size} empty token accounts`);
+  console.log(`Transaction: ${result.signature}`);
+} else {
+  console.log('No empty token accounts to close');
+}
+```
+
+#### Function signature
+
+```typescript
+function closeEmptyTokenAccounts(agent: SolanaAgentKit): Promise<{
+  signature: string;
+  size: number;
+} | {
+  signedTransaction: Transaction;
+  size: number;
+}>
+```
+
+#### How it works
+
+1. Queries all token accounts for both TOKEN_PROGRAM and TOKEN_2022_PROGRAM
+2. Filters for accounts with zero balance
+3. Excludes USDC accounts (to prevent accidental closure)
+4. Creates close instructions for up to 40 accounts per transaction
+5. Signs and sends the transaction
+
+<Note>
+  The function processes a maximum of 40 close instructions per transaction to avoid hitting transaction size limits.
+</Note>
+
+#### Returns
+
+<ResponseField name="signature" type="string">
+  Transaction signature (when not in signOnly mode)
+</ResponseField>
+
+<ResponseField name="signedTransaction" type="Transaction">
+  Signed transaction object (when in signOnly mode)
+</ResponseField>
+
+<ResponseField name="size" type="number">
+  Total number of empty token accounts found (not just those closed in this transaction)
+</ResponseField>
+
+#### Exception list
+
+The following token accounts are never closed:
+
+- **USDC** (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`)
+
+To add more exceptions, modify the `accountExceptions` array in the source:
+
+```typescript
+const accountExceptions = [
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC
+  // Add more addresses here
+];
+```
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Always check balances first" icon="scale-balanced">
+    Before transferring, verify the sender has sufficient balance:
+    
+    ```typescript
+    import { get_balance } from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/tools';
+    
+    const balance = await get_balance(agent, mint);
+    
+    if (balance < amount) {
+      throw new Error(`Insufficient balance. Have: ${balance}, Need: ${amount}`);
+    }
+    
+    const signature = await transfer(agent, recipient, amount, mint);
+    ```
+  </Accordion>
+  
+  <Accordion title="Validate recipient addresses" icon="shield-check">
+    Always validate that recipient addresses are valid Solana public keys:
+    
+    ```typescript
+    import { PublicKey } from '@solana/web3.js';
+    
+    function isValidSolanaAddress(address: string): boolean {
+      try {
+        new PublicKey(address);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    
+    if (!isValidSolanaAddress(recipientAddress)) {
+      throw new Error('Invalid Solana address');
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Use UI amounts, not raw amounts" icon="calculator">
+    Always pass amounts in UI units (e.g., 1.5 SOL, 100 USDC) rather than raw units (lamports, smallest token units). The function handles decimal conversion automatically:
+    
+    ```typescript
+    // ✅ Correct: UI amount
+    await transfer(agent, recipient, 1.5); // 1.5 SOL
+    
+    // ❌ Wrong: Raw lamports
+    await transfer(agent, recipient, 1500000000); // Don't do this!
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle transaction failures gracefully" icon="triangle-exclamation">
+    Network issues, insufficient funds, and other errors can cause transfers to fail. Always use try-catch blocks:
+    
+    ```typescript
+    try {
+      const signature = await transfer(agent, recipient, amount, mint);
+      // Show success message
+      showNotification('Transfer successful!', signature);
+    } catch (error) {
+      // Show error message
+      showError(`Transfer failed: ${error.message}`);
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Consider transaction fees" icon="dollar-sign">
+    Every transaction on Solana costs approximately 0.000005 SOL (5000 lamports) in fees. When transferring the entire balance, leave room for the fee:
+    
+    ```typescript
+    const FEE_BUFFER = 0.00001; // Small buffer for fees
+    const balance = await get_balance(agent);
+    const transferAmount = balance - FEE_BUFFER;
+    
+    if (transferAmount > 0) {
+      await transfer(agent, recipient, transferAmount);
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Common errors
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| "Insufficient balance" | Sender doesn't have enough tokens | Check balance before transfer |
+| "Invalid Solana address" | Recipient address is malformed | Validate address format |
+| "Token account not found" | Sender doesn't have the token account | Ensure sender has received this token before |
+| "Transfer failed: 0x1" | Insufficient SOL for transaction fee | Ensure wallet has SOL for fees |
+| "Transfer failed: account not found" | Sender's token account doesn't exist | Verify the mint address is correct |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Balance operations" icon="scale-balanced" href="/api/token/balance-operations">
+    Check balances before transferring
+  </Card>
+  <Card title="Jupiter integration" icon="arrow-right-arrow-left" href="/api/token/jupiter-integration">
+    Swap tokens before or after transfers
+  </Card>
+  <Card title="DeFi plugin" icon="building-columns" href="/api/defi/overview">
+    Explore lending and borrowing
+  </Card>
+  <Card title="Wallet operations" icon="wallet" href="/features/wallet-operations">
+    Learn about wallet management
+  </Card>
+</CardGroup>

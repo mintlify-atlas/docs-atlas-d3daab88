@@ -1,0 +1,445 @@
+---
+title: Swapping tokens
+description: Learn how to swap tokens using Jupiter Exchange in Synto Mobile
+---
+
+Synto Mobile integrates with Jupiter Exchange to provide best-in-class token swapping on Solana. Jupiter aggregates liquidity from multiple DEXs to give you the best possible prices.
+
+## What is Jupiter?
+
+Jupiter is Solana's leading liquidity aggregator that:
+- Finds the best swap routes across multiple DEXs
+- Splits trades across multiple pools for better prices
+- Provides MEV protection
+- Offers dynamic slippage management
+- Supports all SPL tokens
+
+<Note>
+Jupiter checks prices from Orca, Raydium, Serum, and other DEXs to find you the best rate for every trade.
+</Note>
+
+## How to swap tokens
+
+<Steps>
+  <Step title="Choose your tokens">
+    Decide which tokens you want to swap. You can swap:
+    - SOL to any SPL token
+    - Any SPL token to SOL
+    - Any SPL token to another SPL token
+  </Step>
+  
+  <Step title="Enter amount">
+    Specify how much you want to swap. The app will show you the expected output amount.
+  </Step>
+  
+  <Step title="Review the quote">
+    Check the swap details:
+    - Exchange rate
+    - Price impact
+    - Estimated slippage
+    - Network fees
+    - Output amount
+  </Step>
+  
+  <Step title="Execute swap">
+    Confirm the transaction and sign with your wallet. The swap will be executed on-chain.
+  </Step>
+  
+  <Step title="Receive tokens">
+    Your new tokens will appear in your wallet once the transaction is confirmed.
+  </Step>
+</Steps>
+
+## Swapping with the AI agent
+
+Use natural language to swap tokens:
+
+<CodeGroup>
+
+```bash Swap SOL to USDC
+"Swap 1 SOL for USDC"
+```
+
+```bash Swap USDC to SOL
+"Exchange 100 USDC to SOL"
+```
+
+```bash Swap with slippage
+"Swap 100 USDC for SOL with 1% slippage"
+```
+
+```bash Other commands
+"Trade 5 SOL for BONK"
+"Convert my USDC to SOL"
+```
+
+</CodeGroup>
+
+### Supported commands
+
+The AI agent recognizes these swap commands:
+- "swap tokens"
+- "exchange tokens"
+- "trade tokens"
+- "convert tokens"
+- "swap sol"
+
+## Swap implementation
+
+Here's how swaps work under the hood:
+
+```typescript
+// Get quote from Jupiter
+const quoteResponse = await fetch(
+  `https://quote-api.jup.ag/v6/quote?` +
+  `inputMint=${inputMint.toString()}` +
+  `&outputMint=${outputMint.toString()}` +
+  `&amount=${scaledAmount}` +
+  `&dynamicSlippage=true` +
+  `&minimizeSlippage=false` +
+  `&onlyDirectRoutes=false` +
+  `&maxAccounts=64` +
+  `&swapMode=ExactIn`
+).then(r => r.json());
+
+// Execute swap
+const { swapTransaction } = await fetch(
+  'https://quote-api.jup.ag/v6/swap',
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      quoteResponse,
+      userPublicKey: wallet.publicKey.toString(),
+      wrapAndUnwrapSol: true,
+      dynamicComputeUnitLimit: true,
+      dynamicSlippage: true,
+      prioritizationFeeLamports: {
+        priorityLevelWithMaxLamports: {
+          maxLamports: 10000000,
+          global: false,
+          priorityLevel: "medium"
+        }
+      }
+    })
+  }
+).then(r => r.json());
+```
+
+### Trade action parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `outputMint` | string | Yes | Token mint address you want to receive |
+| `inputAmount` | number | Yes | Amount to swap (in token decimals) |
+| `inputMint` | string | No | Token to swap from (defaults to SOL) |
+| `slippageBps` | number | No | Slippage in basis points (deprecated - uses dynamic) |
+
+<Warning>
+Token amounts are automatically scaled based on decimals. SOL has 9 decimals, USDC has 6 decimals, etc.
+</Warning>
+
+## Understanding slippage
+
+**Slippage** is the difference between the expected price and the execution price.
+
+### Why slippage occurs
+
+- Market volatility between quote and execution
+- Large trades impacting pool prices
+- Other traders executing before you
+- Low liquidity in token pools
+
+### Dynamic slippage management
+
+Synto uses Jupiter's dynamic slippage:
+
+```typescript
+// Automatically adjusts based on:
+dynamicSlippage: true
+minimizeSlippage: false
+```
+
+This means:
+- ✅ Better execution rates
+- ✅ Fewer failed transactions
+- ✅ Optimized for market conditions
+- ✅ No manual slippage configuration needed
+
+<Tip>
+Dynamic slippage is enabled by default. For most trades, you don't need to worry about slippage settings.
+</Tip>
+
+## Swap routing
+
+Jupiter finds the best route for your swap:
+
+### Single route
+```
+SOL → USDC
+(Direct swap through one pool)
+```
+
+### Split route
+```
+SOL → USDC (50% via Orca + 50% via Raydium)
+(Better price by splitting across pools)
+```
+
+### Multi-hop route
+```
+Token A → SOL → USDC → Token B
+(Multiple swaps for best price)
+```
+
+<Note>
+Jupiter automatically handles all routing complexity. You just specify input and output tokens.
+</Note>
+
+## Fees and costs
+
+### Network fees
+
+- **Transaction fee**: ~0.000005 SOL base fee
+- **Priority fee**: Dynamic based on network congestion
+- **Compute units**: Automatically calculated
+
+Example priority fees:
+```typescript
+priorityLevel: "medium"  // Balanced speed and cost
+maxLamports: 10000000    // Maximum 0.01 SOL for priority
+```
+
+### Trading fees
+
+- **Jupiter platform fee**: 0% (configurable)
+- **DEX fees**: Varies by pool (typically 0.25-0.30%)
+- **Referral fees**: Optional
+
+### Total cost example
+
+For a 1 SOL → USDC swap:
+```
+Input: 1 SOL
+DEX fee (0.25%): 0.0025 SOL
+Network fee: ~0.00001 SOL
+Output: ~$23.45 USDC (at SOL price of $23.50)
+Price impact: ~0.1%
+```
+
+<Tip>
+Larger trades may have higher price impact. Consider splitting very large trades into multiple smaller swaps.
+</Tip>
+
+## Advanced features
+
+### Wrapping/unwrapping SOL
+
+Synto automatically handles SOL wrapping:
+
+```typescript
+wrapAndUnwrapSol: true  // Automatically wrap/unwrap as needed
+```
+
+This means:
+- Native SOL → Wrapped SOL (wSOL) when needed
+- wSOL → Native SOL after swap
+- No manual wrapping required
+
+### Route optimization
+
+```typescript
+onlyDirectRoutes: false  // Allow multi-hop routes
+maxAccounts: 64         // Maximum accounts in transaction
+```
+
+**Benefits:**
+- Better prices through complex routes
+- Access to more liquidity
+- Optimized for each trade
+
+### Swap modes
+
+```typescript
+swapMode: "ExactIn"  // Specify exact input amount
+// vs
+swapMode: "ExactOut" // Specify exact output amount
+```
+
+Synto uses `ExactIn` mode by default - you specify how much you want to spend.
+
+## Price checking
+
+Before swapping, check current token prices:
+
+<CodeGroup>
+
+```bash Check SOL price
+"Get token price for So11111111111111111111111111111111111111112"
+```
+
+```bash Check any token
+"What's the current price of USDC?"
+```
+
+</CodeGroup>
+
+### Price response
+
+```json
+{
+  "status": "success",
+  "price": "23.45",
+  "message": "Current price: $23.45 USDC"
+}
+```
+
+## Common swap scenarios
+
+### Swap SOL to stablecoin
+
+```typescript
+// Example: 1 SOL → USDC
+{
+  outputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC
+  inputAmount: 1,
+  // inputMint defaults to SOL
+}
+```
+
+### Swap stablecoin to SOL
+
+```typescript
+// Example: 100 USDC → SOL
+{
+  outputMint: "So11111111111111111111111111111111111111112",  // SOL
+  inputAmount: 100,
+  inputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC
+}
+```
+
+### Swap between tokens
+
+```typescript
+// Example: USDC → USDT
+{
+  outputMint: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",  // USDT
+  inputAmount: 100,
+  inputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC
+}
+```
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Before swapping">
+    - ✅ Check current token prices
+    - ✅ Verify you have enough SOL for fees
+    - ✅ Understand price impact for large trades
+    - ✅ Compare rates across different times
+    - ✅ Test with small amounts first
+  </Accordion>
+  
+  <Accordion title="During swap">
+    - ✅ Review all transaction details
+    - ✅ Verify input and output tokens
+    - ✅ Check expected amounts
+    - ✅ Confirm network fees are reasonable
+    - ✅ Don't close app while transaction pending
+  </Accordion>
+  
+  <Accordion title="After swap">
+    - ✅ Verify new token balance
+    - ✅ Save transaction signature
+    - ✅ Check execution price vs expected
+    - ✅ Close unused token accounts if needed
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Swap failed: Slippage exceeded">
+    The price moved too much between quote and execution.
+    
+    **Solutions:**
+    - Try again immediately (get fresh quote)
+    - Wait for less volatile market conditions
+    - Split large trades into smaller ones
+    - Use dynamic slippage (enabled by default)
+  </Accordion>
+  
+  <Accordion title="Insufficient liquidity">
+    Not enough liquidity in pools for your trade.
+    
+    **Solutions:**
+    - Reduce trade size
+    - Try swapping through SOL as intermediate
+    - Wait for better liquidity conditions
+    - Check if token is actively traded
+  </Accordion>
+  
+  <Accordion title="Transaction timeout">
+    Transaction didn't complete in time.
+    
+    **Solutions:**
+    - Increase priority fee to "fast"
+    - Wait and try during lower network congestion
+    - Try smaller trade amount
+    - Check network status
+  </Accordion>
+  
+  <Accordion title="Token account doesn't exist">
+    You don't have a token account for the output token.
+    
+    **Solutions:**
+    - Ensure you have ~0.002 SOL extra for account creation
+    - Transaction will automatically create the account
+    - This is normal for receiving new tokens
+  </Accordion>
+</AccordionGroup>
+
+## Transaction response
+
+Successful swap returns:
+
+```json
+{
+  "status": "success",
+  "message": "Trade executed successfully",
+  "transaction": "5UfgJ5vVZxUxefDGqzqkVLHzHxVTyYH9...",
+  "inputAmount": 1,
+  "inputToken": "SOL",
+  "outputToken": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+}
+```
+
+<Tip>
+Save the transaction signature to view details on Solana explorers like Solscan or SolanaFM.
+</Tip>
+
+## Security tips
+
+- ✅ Always verify token mint addresses
+- ✅ Be cautious of tokens with similar names
+- ✅ Check token legitimacy on trusted sources
+- ✅ Start with small test trades
+- ✅ Never share your private key or seed phrase
+- ⚠️ Understand that swaps are irreversible
+
+## Related resources
+
+<CardGroup cols={2}>
+  <Card title="Token operations" icon="coins" href="/guides/token-operations">
+    Basic token management guide
+  </Card>
+  <Card title="DeFi operations" icon="chart-line" href="/guides/defi-operations">
+    Overview of all DeFi features
+  </Card>
+  <Card title="Staking" icon="layer-group" href="/guides/staking">
+    Learn about liquid staking
+  </Card>
+  <Card title="Lending" icon="hand-holding-dollar" href="/guides/lending">
+    Guide to lending and borrowing
+  </Card>
+</CardGroup>

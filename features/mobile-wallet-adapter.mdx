@@ -1,0 +1,759 @@
+---
+title: Mobile Wallet Adapter
+description: Secure transaction signing and wallet integration using Solana's Mobile Wallet Adapter protocol
+---
+
+Mobile Wallet Adapter (MWA) is Solana's standard protocol for mobile dApps to communicate with wallet apps. Synto Mobile implements MWA to provide secure, seamless transaction signing without requiring private keys to leave your wallet app.
+
+## How it works
+
+MWA establishes a secure session between Synto Mobile and your wallet app:
+
+<Steps>
+  <Step title="Session request">
+    Synto Mobile initiates a `transact` session when wallet interaction is needed.
+  </Step>
+  
+  <Step title="Wallet selection">
+    Your device prompts you to choose a compatible wallet app (Phantom, Solflare, etc.).
+  </Step>
+  
+  <Step title="Authorization">
+    The wallet app requests permission to share your public key and sign transactions.
+  </Step>
+  
+  <Step title="Secure communication">
+    All subsequent requests go through the encrypted MWA session.
+  </Step>
+</Steps>
+
+<Info>
+MWA sessions are ephemeral and require reauthorization after expiration. Auth tokens are cached locally to reduce repeated prompts.
+</Info>
+
+## Core implementation
+
+The `useMobileWallet` hook provides the primary MWA interface:
+
+```typescript
+import { transact } from "@solana-mobile/mobile-wallet-adapter-protocol-web3js";
+import { Transaction, VersionedTransaction } from "@solana/web3.js";
+
+export function useMobileWallet() {
+  const { authorizeSessionWithSignIn, authorizeSession, deauthorizeSessions } = 
+    useAuthorization();
+  
+  const connect = useCallback(async (): Promise<Account> => {
+    try {
+      return await transact(async (wallet) => {
+        return await authorizeSession(wallet);
+      });
+    } catch (error) {
+      await handleWalletError(error);
+      throw error;
+    }
+  }, [authorizeSession, handleWalletError]);
+  
+  const signAndSendTransaction = useCallback(
+    async (
+      transaction: Transaction | VersionedTransaction,
+      minContextSlot?: number
+    ): Promise<TransactionSignature> => {
+      try {
+        return await transact(async (wallet) => {
+          await authorizeSession(wallet);
+          const signatures = await wallet.signAndSendTransactions({
+            transactions: [transaction],
+            minContextSlot,
+          });
+          return signatures[0];
+        });
+      } catch (error) {
+        await handleWalletError(error);
+        throw error;
+      }
+    },
+    [authorizeSession, handleWalletError]
+  );
+  
+  return {
+    connect,
+    disconnect,
+    signAndSendTransaction,
+    signMessage,
+    signTransactions,
+  };
+}
+```
+
+## MWA operations
+
+MWA supports several key operations:
+
+<CardGroup cols={2}>
+  <Card title="Connect" icon="link">
+    Establish initial authorization and retrieve public key
+  </Card>
+  <Card title="Sign and send" icon="signature">
+    Sign transactions and submit to blockchain in one step
+  </Card>
+  <Card title="Sign only" icon="pen">
+    Sign transactions without sending (for multi-sig)
+  </Card>
+  <Card title="Sign message" icon="message">
+    Sign arbitrary messages for authentication
+  </Card>
+</CardGroup>
+
+### Connecting wallets
+
+The connect operation establishes the initial session:
+
+```typescript
+const connect = useCallback(async (): Promise<Account> => {
+  return await transact(async (wallet) => {
+    return await authorizeSession(wallet);
+  });
+}, [authorizeSession]);
+```
+
+The `authorizeSession` function sends the authorization request:
+
+```typescript
+const authorizeSession = useCallback(
+  async (wallet: AuthorizeAPI) => {
+    const authorizationResult = await wallet.authorize({
+      identity: {
+        name: 'Synto Mobile',
+        uri: 'https://synto.io'
+      },
+      chain: selectedCluster.id, // solana:mainnet, solana:devnet, etc.
+      auth_token: cachedAuthToken, // Reuse if available
+    });
+    return handleAuthorizationResult(authorizationResult).selectedAccount;
+  },
+  [selectedCluster, cachedAuthToken]
+);
+```
+
+**Authorization result contains:**
+
+```typescript
+interface AuthorizationResult {
+  accounts: AuthorizedAccount[];  // All authorized accounts
+  auth_token: string;             // Session token for reauthorization
+  wallet_uri_base: string;        // Wallet app identifier
+}
+
+interface AuthorizedAccount {
+  address: Base64EncodedAddress;  // Base64-encoded public key
+  label?: string;                 // Account name/label
+  icon?: WalletIcon;              // Wallet icon URI
+}
+```
+
+<Note>
+Auth tokens are persisted to AsyncStorage and reused for subsequent authorizations within the same session.
+</Note>
+
+### Signing and sending transactions
+
+The most common operation is signing and immediately sending:
+
+```typescript
+const signAndSendTransaction = useCallback(
+  async (
+    transaction: Transaction | VersionedTransaction,
+    minContextSlot?: number
+  ): Promise<TransactionSignature> => {
+    return await transact(async (wallet) => {
+      await authorizeSession(wallet); // Reauthorize with cached token
+      
+      const signatures = await wallet.signAndSendTransactions({
+        transactions: [transaction],
+        minContextSlot,
+      });
+      
+      return signatures[0];
+    });
+  },
+  [authorizeSession]
+);
+```
+
+**Parameters:**
+
+- `transactions`: Array of unsigned transactions (usually just one)
+- `minContextSlot`: Minimum slot the transaction must be evaluated at
+
+**Returns:**
+
+Array of base58-encoded transaction signatures in the same order as input transactions.
+
+<Tabs>
+  <Tab title="Legacy transactions">
+    ```typescript
+    import { Transaction, SystemProgram } from '@solana/web3.js';
+    
+    const transaction = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: sender,
+        toPubkey: recipient,
+        lamports: amount,
+      })
+    );
+    
+    // Note: Synto throws error for legacy transactions
+    // Use VersionedTransaction instead
+    ```
+  </Tab>
+  
+  <Tab title="Versioned transactions">
+    ```typescript
+    import { 
+      TransactionMessage, 
+      VersionedTransaction 
+    } from '@solana/web3.js';
+    
+    const messageV0 = new TransactionMessage({
+      payerKey: sender,
+      recentBlockhash: blockhash,
+      instructions: [transferInstruction],
+    }).compileToV0Message();
+    
+    const transaction = new VersionedTransaction(messageV0);
+    const signature = await signAndSendTransaction(transaction);
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+Synto Mobile currently only supports `VersionedTransaction`. Legacy `Transaction` objects will throw an error.
+</Warning>
+
+### Signing without sending
+
+For multi-signature or deferred execution:
+
+```typescript
+const signTransactions = useCallback(
+  async (transactions: VersionedTransaction[]): Promise<VersionedTransaction[]> => {
+    return await transact(async (wallet) => {
+      await authorizeSession(wallet);
+      return await wallet.signTransactions({ transactions });
+    });
+  },
+  [authorizeSession]
+);
+```
+
+**Use cases:**
+
+- Multi-signature transactions requiring multiple signers
+- Transactions sent later or through custom RPC
+- Batch signing multiple transactions
+
+**Returns:**
+
+Array of signed transactions with signatures populated, but not submitted to blockchain.
+
+### Signing messages
+
+For authentication or off-chain verification:
+
+```typescript
+const signMessage = useCallback(
+  async (message: Uint8Array): Promise<Uint8Array> => {
+    return await transact(async (wallet) => {
+      const authResult = await authorizeSession(wallet);
+      const signedMessages = await wallet.signMessages({
+        addresses: [authResult.address],
+        payloads: [message],
+      });
+      return signedMessages[0];
+    });
+  },
+  [authorizeSession]
+);
+```
+
+**Common use cases:**
+
+- Sign-in with Solana (SIWS) authentication
+- Proving wallet ownership
+- Off-chain message verification
+- Challenge-response protocols
+
+<Info>
+Signed messages can be verified using `nacl.sign.detached.verify()` with the public key.
+</Info>
+
+## AI agent integration
+
+The `useSolanaAgent` hook wraps MWA functions for AI tool execution:
+
+```typescript
+export function useSolanaAgent() {
+  const { signAndSendTransaction, signTransactions, signMessage } = useMobileWallet();
+  const { account } = useWalletUi();
+  
+  const agent = useMemo(() => {
+    if (!account?.publicKey) return null;
+    
+    const fns = {
+      signTransaction: async <T extends Transaction | VersionedTransaction>(tx: T) => {
+        if (tx instanceof Transaction) {
+          throw new Error(
+            "Legacy Transaction signing not supported. Use VersionedTransaction."
+          );
+        }
+        const signed = await signTransactions([tx as VersionedTransaction]);
+        return signed[0] as T;
+      },
+      signMessage: async (msg: Uint8Array) => {
+        return await signMessage(msg);
+      },
+      sendTransaction: async <T extends Transaction | VersionedTransaction>(tx: T) => {
+        return await signAndSendTransaction(tx);
+      },
+      signAllTransactions: async <T extends Transaction | VersionedTransaction>(txs: T[]) => {
+        const signed = await signTransactions(txs as VersionedTransaction[]);
+        return signed as T[];
+      },
+      signAndSendTransaction: async <T extends Transaction | VersionedTransaction>(tx: T) => {
+        const signature = await signAndSendTransaction(tx);
+        return { signature };
+      },
+      publicKey: account.publicKey,
+    };
+    
+    return agentBuilder(fns, { signOnly: false });
+  }, [account, signAndSendTransaction, signTransactions, signMessage]);
+  
+  const tools = useMemo(() => {
+    if (agent) {
+      return createVercelAITools(agent, agent.actions);
+    }
+    return null;
+  }, [agent]);
+  
+  return { agent, tools, isReady: !!agent };
+}
+```
+
+This integration allows AI tools to:
+
+1. Build transactions for blockchain operations
+2. Request user approval via MWA
+3. Submit signed transactions
+4. Return signatures and results
+
+<Steps>
+  <Step title="AI determines intent">
+    User asks "Swap 1 SOL to USDC". AI parses parameters and selects the `TRADE` tool.
+  </Step>
+  
+  <Step title="Tool builds transaction">
+    The trade tool constructs a Jupiter swap transaction with proper instructions.
+  </Step>
+  
+  <Step title="Request MWA signature">
+    Agent calls `signAndSendTransaction` which triggers MWA flow.
+  </Step>
+  
+  <Step title="User approves in wallet">
+    Wallet app shows transaction details. User reviews and approves.
+  </Step>
+  
+  <Step title="Transaction submitted">
+    Signed transaction is sent to blockchain. Signature returned to AI.
+  </Step>
+  
+  <Step title="Result displayed">
+    AI responds with success message and transaction signature.
+  </Step>
+</Steps>
+
+## Authorization management
+
+MWA sessions are managed through the `useAuthorization` hook:
+
+### Persistent storage
+
+Auth tokens and account info are cached:
+
+```typescript
+const AUTHORIZATION_STORAGE_KEY = "authorization-cache";
+
+interface WalletAuthorization {
+  accounts: Account[];
+  authToken: AuthToken;
+  selectedAccount: Account;
+}
+
+const usePersistAuthorization = () => {
+  return useMutation({
+    mutationFn: async (auth: WalletAuthorization | null): Promise<void> => {
+      await AsyncStorage.setItem(
+        AUTHORIZATION_STORAGE_KEY, 
+        JSON.stringify(auth)
+      );
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['wallet-authorization'] }),
+  });
+};
+
+const useFetchAuthorization = () => {
+  return useQuery({
+    queryKey: ['wallet-authorization'],
+    queryFn: async (): Promise<WalletAuthorization | null> => {
+      const cached = await AsyncStorage.getItem(AUTHORIZATION_STORAGE_KEY);
+      return cached ? JSON.parse(cached, cacheReviver) : null;
+    },
+  });
+};
+```
+
+**Cache reviver** reconstructs `PublicKey` objects:
+
+```typescript
+function cacheReviver(key: string, value: any) {
+  if (key === "publicKey") {
+    return new PublicKey(value);
+  }
+  return value;
+}
+```
+
+<Note>
+React Query manages authorization state reactivity. When authorization changes, all components using `useAuthorization` automatically update.
+</Note>
+
+### Reauthorization
+
+Subsequent operations reuse cached tokens:
+
+```typescript
+const authorizeSession = useCallback(
+  async (wallet: AuthorizeAPI) => {
+    const authorizationResult = await wallet.authorize({
+      identity,
+      chain: selectedCluster.id,
+      auth_token: cachedAuthToken, // Reuse if valid
+    });
+    return handleAuthorizationResult(authorizationResult).selectedAccount;
+  },
+  [cachedAuthToken, selectedCluster]
+);
+```
+
+If the cached token is valid, the wallet app won't prompt the user again.
+
+### Deauthorization
+
+Disconnecting clears the authorization:
+
+```typescript
+const deauthorizeSession = useCallback(
+  async (wallet: DeauthorizeAPI) => {
+    if (cachedAuthToken == null) return;
+    
+    await wallet.deauthorize({ auth_token: cachedAuthToken });
+    await persistMutation.mutateAsync(null);
+  },
+  [cachedAuthToken, persistMutation]
+);
+
+const deauthorizeSessions = useCallback(async () => {
+  await invalidateAuthorizations();
+  await persistMutation.mutateAsync(null);
+}, [invalidateAuthorizations, persistMutation]);
+```
+
+**Two deauthorization methods:**
+
+1. `deauthorizeSession`: Calls wallet app to formally close session
+2. `deauthorizeSessions`: Just clears local cache (used for errors)
+
+## Error handling
+
+MWA operations can fail for various reasons:
+
+### Authorization errors
+
+```typescript
+const handleWalletError = useCallback(async (error: any) => {
+  console.error('Wallet error:', error);
+  
+  const isAuthError = 
+    error?.message?.includes('authorization') ||
+    error?.message?.includes('not authorized') ||
+    error?.message?.includes('wallet not connected') ||
+    error?.code === 'UNAUTHORIZED';
+  
+  if (isAuthError) {
+    console.log('Auto-disconnect due to authorization error');
+    await deauthorizeSessions();
+  }
+  
+  throw error;
+}, [deauthorizeSessions]);
+```
+
+**Common auth errors:**
+
+- User denies authorization in wallet app
+- Auth token expires
+- Wallet app closed/crashed
+- Network switch invalidates session
+
+<Warning>
+Authorization errors trigger automatic disconnection. Users must reconnect to continue using wallet features.
+</Warning>
+
+### Transaction errors
+
+Transaction failures are caught and logged:
+
+```typescript
+try {
+  const signature = await signAndSendTransaction(transaction, minContextSlot);
+  await connection.confirmTransaction(
+    { signature, ...latestBlockhash },
+    'confirmed'
+  );
+  return signature;
+} catch (error: unknown) {
+  console.log('Transaction failed', error);
+  throw error;
+}
+```
+
+**Common transaction errors:**
+
+- Insufficient balance for fees
+- Invalid instruction parameters
+- Transaction expired (stale blockhash)
+- User rejected in wallet app
+- Network congestion/timeout
+
+### User rejection
+
+When users decline in their wallet app:
+
+```typescript
+// MWA throws specific error
+if (error?.message?.includes('User declined')) {
+  console.log('User rejected the transaction');
+  // Show user-friendly message
+}
+```
+
+<Info>
+Always handle user rejection gracefully. Don't automatically retry - let users reinitiate if desired.
+</Info>
+
+## Security considerations
+
+<CardGroup cols={2}>
+  <Card title="No private keys" icon="shield-halved">
+    Private keys never leave the wallet app. Synto only receives signed transactions.
+  </Card>
+  
+  <Card title="User approval" icon="user-check">
+    Every transaction requires explicit user approval in the wallet app.
+  </Card>
+  
+  <Card title="Session isolation" icon="lock">
+    Each MWA session is isolated. Closing Synto ends the session.
+  </Card>
+  
+  <Card title="Token expiration" icon="clock">
+    Auth tokens expire and require reauthorization periodically.
+  </Card>
+</CardGroup>
+
+### App identity
+
+Synto Mobile identifies itself in MWA requests:
+
+```typescript
+const identity: AppIdentity = {
+  name: 'Synto Mobile',
+  uri: 'https://synto.io'
+};
+```
+
+This identity is displayed in the wallet app during authorization, helping users verify they're connecting to the legitimate Synto app.
+
+### Chain specification
+
+The `chain` parameter ensures transactions go to the correct network:
+
+```typescript
+chain: selectedCluster.id // "solana:mainnet" or "solana:devnet"
+```
+
+Wallet apps can reject transactions if the chain doesn't match their current network.
+
+<Warning>
+Always verify the chain parameter matches your intended network. Mainnet transactions use real SOL and are irreversible.
+</Warning>
+
+## Transaction flow diagram
+
+Here's the complete flow from user action to blockchain confirmation:
+
+<Steps>
+  <Step title="User initiates action">
+    User taps "Send" or executes an AI tool requiring blockchain interaction.
+  </Step>
+  
+  <Step title="Build transaction">
+    App constructs unsigned transaction with:
+    - Recent blockhash
+    - Minimum context slot
+    - Instructions (transfer, swap, etc.)
+    - Fee payer (user's public key)
+  </Step>
+  
+  <Step title="Start MWA session">
+    Call `transact()` to begin MWA session. System prompts for wallet app selection.
+  </Step>
+  
+  <Step title="Reauthorize session">
+    Send authorization request with cached token. Wallet validates token.
+  </Step>
+  
+  <Step title="Request signature">
+    Send unsigned transaction to wallet via `signAndSendTransactions()`.
+  </Step>
+  
+  <Step title="User reviews">
+    Wallet displays transaction details:
+    - Recipient address
+    - Amount and token
+    - Network fees
+    - Program interactions
+  </Step>
+  
+  <Step title="User approves/rejects">
+    User taps approve or reject button in wallet app.
+  </Step>
+  
+  <Step title="Sign transaction">
+    If approved, wallet signs transaction with private key and submits to RPC.
+  </Step>
+  
+  <Step title="Return signature">
+    Wallet returns transaction signature to Synto Mobile.
+  </Step>
+  
+  <Step title="Confirm transaction">
+    Synto polls RPC endpoint until transaction reaches 'confirmed' commitment.
+  </Step>
+  
+  <Step title="Update UI">
+    Invalidate queries to refresh balances. Show success message with signature.
+  </Step>
+</Steps>
+
+## Wallet compatibility
+
+MWA is supported by major Solana mobile wallets:
+
+| Wallet | MWA Support | Sign-in Support | Notes |
+|--------|-------------|-----------------|-------|
+| **Phantom** | ✅ Yes | ✅ Yes | Full support |
+| **Solflare** | ✅ Yes | ✅ Yes | Full support |
+| **Glow** | ✅ Yes | ✅ Yes | Full support |
+| **Ultimate** | ✅ Yes | ⚠️ Partial | Limited features |
+| **Backpack** | ✅ Yes | ✅ Yes | Full support |
+
+<Info>
+For best experience, recommend users install Phantom or Solflare. These wallets have the most complete MWA implementations.
+</Info>
+
+## Best practices
+
+<Steps>
+  <Step title="Cache auth tokens">
+    Always persist and reuse auth tokens to minimize user prompts. Expiration is handled automatically.
+  </Step>
+  
+  <Step title="Use VersionedTransaction">
+    Legacy transactions have limitations. Always use `VersionedTransaction` for compatibility.
+  </Step>
+  
+  <Step title="Set minContextSlot">
+    Include `minContextSlot` in transaction requests to prevent stale data issues.
+  </Step>
+  
+  <Step title="Handle errors gracefully">
+    Catch all MWA errors and show user-friendly messages. Auto-disconnect on auth failures.
+  </Step>
+  
+  <Step title="Confirm before invalidating">
+    Wait for transaction confirmation before invalidating cached balances. Prevents showing incorrect data.
+  </Step>
+  
+  <Step title="Test on devnet">
+    Always test MWA integration on devnet before deploying to mainnet.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Wallet not opening
+
+**Symptoms**: Nothing happens when tapping connect/approve
+
+**Solutions**:
+- Ensure compatible wallet app is installed
+- Check wallet app is updated to latest version
+- Try restarting wallet app
+- Clear AsyncStorage and retry authorization
+
+### Session expired errors
+
+**Symptoms**: "Authorization expired" or "Invalid auth token"
+
+**Solutions**:
+- Clear cached authorization: `await AsyncStorage.removeItem(AUTHORIZATION_STORAGE_KEY)`
+- Reconnect wallet
+- Check network connectivity
+
+### Transaction failures
+
+**Symptoms**: Transactions rejected or timing out
+
+**Solutions**:
+- Verify sufficient balance for fees
+- Check blockhash isn't stale (fetch fresh)
+- Ensure network parameter matches wallet
+- Try reducing `minContextSlot` requirement
+
+### Multiple accounts
+
+**Symptoms**: Wrong account being used
+
+**Solutions**:
+- MWA returns all authorized accounts
+- Select correct account from `accounts` array
+- Update `selectedAccount` in authorization state
+
+<Note>
+For detailed MWA debugging, enable console logs and inspect the `wallet` object returned by `transact()`.
+</Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="AI chat interface" icon="robot" href="/features/ai-chat-interface">
+    Learn how AI tools use MWA for blockchain operations
+  </Card>
+  
+  <Card title="Wallet operations" icon="wallet" href="/features/wallet-operations">
+    Explore wallet features built on MWA
+  </Card>
+</CardGroup>

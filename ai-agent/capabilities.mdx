@@ -1,0 +1,370 @@
+---
+title: Agent capabilities
+description: Complete guide to everything the Synto Mobile AI agent can do, from token swaps to DeFi lending
+---
+
+The Synto Mobile AI agent can execute a wide range of blockchain operations through natural language commands. This page details all available capabilities organized by category.
+
+## Token operations
+
+Manage your Solana tokens with simple commands:
+
+<AccordionGroup>
+  <Accordion title="Transfer tokens" icon="paper-plane">
+    Send SOL or SPL tokens to any address.
+
+    **Natural language examples:**
+    - "Send 1 SOL to [address]"
+    - "Transfer 100 USDC to [address]"
+    - "Send tokens to [address]"
+
+    **What it does:**
+    - Transfers native SOL or any SPL token
+    - Validates recipient address format
+    - Confirms amount before sending
+
+    **Parameters:**
+    - `to` - Recipient wallet address (required)
+    - `amount` - Amount to send (required)
+    - `mint` - Token mint address (optional, defaults to SOL)
+
+    Source: `utils/syntoUtils/agent/plugins/plugin-token/solana/actions/transfer.ts:6`
+  </Accordion>
+
+  <Accordion title="Check balances" icon="wallet">
+    View your SOL balance or all token balances.
+
+    **Natural language examples:**
+    - "What's my balance?"
+    - "Show my SOL balance"
+    - "List all my tokens"
+
+    **What it does:**
+    - Returns SOL balance in lamports and SOL
+    - Shows all SPL token balances
+    - Includes token metadata when available
+
+    **Available methods:**
+    - `get_balance` - Your SOL balance
+    - `get_balance_other` - Another wallet's balance
+    - `get_token_balance` - Specific token balance
+  </Accordion>
+
+  <Accordion title="Token data lookup" icon="magnifying-glass">
+    Get information about any token on Solana.
+
+    **Natural language examples:**
+    - "Get token data for USDC"
+    - "Show me info about [token address]"
+    - "What's the price of SOL?"
+
+    **What it does:**
+    - Fetches token metadata from DexScreener
+    - Looks up tokens by ticker symbol
+    - Returns current market data
+
+    **Integrations:**
+    - DexScreener API for market data
+    - Jupiter API for price feeds
+  </Accordion>
+
+  <Accordion title="Close empty accounts" icon="trash">
+    Clean up empty token accounts to reclaim rent.
+
+    **What it does:**
+    - Finds token accounts with zero balance
+    - Closes accounts to reclaim SOL rent
+    - Returns reclaimed amount
+
+    Source: `utils/syntoUtils/agent/plugins/plugin-token/solana/actions/closeEmptyTokenAccounts.ts`
+  </Accordion>
+</AccordionGroup>
+
+## Trading and swaps
+
+Execute token swaps using Jupiter Exchange:
+
+<Tabs>
+  <Tab title="Basic swap">
+    **Swap any token for another**
+
+    The agent uses Jupiter Exchange to find the best price across all Solana DEXs.
+
+    ```typescript
+    // Example: Swap 1 SOL for USDC
+    {
+      outputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      inputAmount: 1
+    }
+    ```
+
+    **Natural language:**
+    - "Swap 1 SOL for USDC"
+    - "Exchange 100 USDC to SOL"
+    - "Trade tokens"
+
+    Source: `utils/syntoUtils/agent/plugins/plugin-token/jupiter/actions/trade.ts:6`
+  </Tab>
+
+  <Tab title="Advanced options">
+    **Control slippage and routing**
+
+    Customize your swap with advanced parameters:
+
+    ```typescript
+    {
+      outputMint: "So11111111111111111111111111111111111111112",
+      inputAmount: 100,
+      inputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+      slippageBps: 100  // 1% slippage
+    }
+    ```
+
+    **Parameters:**
+    - `outputMint` - Token you want to receive
+    - `inputAmount` - Amount to swap
+    - `inputMint` - Token you're swapping (defaults to SOL)
+    - `slippageBps` - Max slippage in basis points (optional)
+
+    <Note>
+    Slippage is in basis points: 100 bps = 1%, 50 bps = 0.5%
+    </Note>
+  </Tab>
+
+  <Tab title="Price checking">
+    **Get current prices**
+
+    Check token prices before trading:
+
+    **Natural language:**
+    - "What's the price of USDC?"
+    - "Get SOL price"
+    - "Fetch price for [token]"
+
+    **What it returns:**
+    - Current price in USDC
+    - Price feed data
+    - Market statistics
+
+    Source: `utils/syntoUtils/agent/plugins/plugin-token/jupiter/actions/fetchPrice.ts`
+  </Tab>
+</Tabs>
+
+<Warning>
+Always review swap details before confirming. The agent will show you the estimated output amount and required approvals.
+</Warning>
+
+## DeFi operations
+
+Access decentralized finance protocols through the agent:
+
+<CardGroup cols={2}>
+  <Card title="Lending with Rainfi" icon="hand-holding-dollar">
+    Borrow assets using your crypto as collateral
+  </Card>
+  <Card title="Loan quotes" icon="calculator">
+    Calculate loan terms before borrowing
+  </Card>
+  <Card title="Repay loans" icon="money-bill-transfer">
+    Pay back borrowed amounts plus interest
+  </Card>
+  <Card title="Active loans" icon="list">
+    View all your current loan positions
+  </Card>
+</CardGroup>
+
+### Rainfi integration
+
+The agent integrates with Rainfi for decentralized lending:
+
+<AccordionGroup>
+  <Accordion title="Get loan quote">
+    Calculate how much you can borrow and the terms.
+
+    **Parameters:**
+    - `amountIn` - Collateral amount in lamports
+    - `currencyIn` - Collateral token address
+    - `currencyOut` - Token you want to borrow
+    - `borrower` - Your wallet address (auto-filled)
+
+    **Returns:**
+    - Loan amount
+    - Duration (typically 7 days)
+    - Interest rate
+    - APR
+    - Rainfi fees
+    - Authorization token for borrowing
+
+    ```typescript
+    // Example: Borrow USDC using SOL collateral
+    {
+      amountIn: 1000000000,  // 1 SOL
+      currencyIn: "So11111111111111111111111111111111111111112",
+      currencyOut: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    }
+    ```
+
+    Source: `utils/syntoUtils/agent/plugins/plugin-defi/rainfi/actions/quoteLoanCalculator.ts:5`
+  </Accordion>
+
+  <Accordion title="Create loan">
+    Execute a loan transaction based on a quote.
+
+    **What it does:**
+    1. Takes your quote authorization
+    2. Builds the loan transaction
+    3. Deposits your collateral
+    4. Receives borrowed tokens
+
+    **Natural language:**
+    - "Borrow USDC with my SOL"
+    - "Take out a loan"
+    - "Execute this loan quote"
+
+    <Note>
+    You must get a loan quote first before creating the loan.
+    </Note>
+  </Accordion>
+
+  <Accordion title="View active loans">
+    See all your current loan positions.
+
+    **What it shows:**
+    - Loan amounts
+    - Collateral locked
+    - Interest accrued
+    - Repayment due dates
+    - Health ratios
+
+    **Natural language:**
+    - "Show my loans"
+    - "What loans do I have?"
+    - "Check my borrowing positions"
+  </Accordion>
+
+  <Accordion title="Repay loan">
+    Pay back borrowed amounts to reclaim collateral.
+
+    **What it does:**
+    - Calculates total repayment (principal + interest)
+    - Transfers repayment tokens
+    - Returns your collateral
+    - Closes the loan position
+
+    **Natural language:**
+    - "Repay my loan"
+    - "Pay back my USDC loan"
+    - "Close this loan position"
+
+    Source: `utils/syntoUtils/agent/plugins/plugin-defi/rainfi/actions/RepayLoan.ts`
+  </Accordion>
+</AccordionGroup>
+
+## Blockchain utilities
+
+Useful Solana blockchain operations:
+
+<Tabs>
+  <Tab title="Network info">
+    **Get Solana network statistics**
+
+    - Current TPS (transactions per second)
+    - Network performance metrics
+    - Cluster information
+
+    **Natural language:**
+    - "What's the current TPS?"
+    - "Show network stats"
+    - "How fast is Solana?"
+
+    Source: `utils/syntoUtils/agent/plugins/plugin-token/solana/actions/getTPS.ts`
+  </Tab>
+
+  <Tab title="Wallet info">
+    **Get your wallet address**
+
+    Returns your connected wallet's public key.
+
+    **Natural language:**
+    - "What's my wallet address?"
+    - "Show my public key"
+    - "Give me my address"
+
+    Source: `utils/syntoUtils/agent/plugins/plugin-token/solana/actions/walletAddress.ts`
+  </Tab>
+
+  <Tab title="Request funds">
+    **Get testnet/devnet SOL**
+
+    Request airdrop on development networks for testing.
+
+    **Natural language:**
+    - "Request devnet funds"
+    - "Airdrop SOL"
+    - "Get test SOL"
+
+    <Warning>
+    Only works on devnet and testnet, not on mainnet.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Staking operations
+
+Stake tokens to earn rewards:
+
+<Accordion title="Stake with Jupiter">
+  **JUP token staking**
+
+  Stake JUP tokens to participate in governance and earn rewards.
+
+  **What it does:**
+  - Stakes JUP tokens in Jupiter's staking program
+  - Earns staking rewards
+  - Maintains voting power for governance
+
+  **Natural language:**
+  - "Stake my JUP tokens"
+  - "Stake with Jupiter"
+
+  Source: `utils/syntoUtils/agent/plugins/plugin-token/jupiter/actions/stakeWithJup.ts`
+</Accordion>
+
+## Configuration options
+
+The agent supports various configuration options to customize behavior:
+
+| Option | Description | Default |
+|--------|-------------|----------|
+| `JUPITER_REFERRAL_ACCOUNT` | Your referral account for Jupiter swaps | None |
+| `JUPITER_FEE_BPS` | Fee in basis points for Jupiter | 0 |
+| `PRIORITY_LEVEL` | Transaction priority fee level | `medium` |
+| `signOnly` | Only sign transactions, don't broadcast | `false` |
+
+<Note>
+Priority levels: `medium`, `high`, `veryHigh`. Higher priority = faster execution but higher fees.
+</Note>
+
+## Action validation
+
+All agent actions use Zod schemas for input validation:
+
+- **Address validation** - Ensures valid Solana addresses (32+ characters)
+- **Amount validation** - Requires positive numbers
+- **Slippage bounds** - Limits slippage to 0-10000 bps (0-100%)
+- **Type safety** - Full TypeScript type checking
+
+<Warning>
+Invalid inputs will be rejected before any blockchain interaction occurs.
+</Warning>
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Plugin architecture" icon="puzzle-piece" href="/ai-agent/plugins">
+    Learn how plugins power the agent
+  </Card>
+  <Card title="Agent overview" icon="robot" href="/ai-agent/overview">
+    Understand the core architecture
+  </Card>
+</CardGroup>

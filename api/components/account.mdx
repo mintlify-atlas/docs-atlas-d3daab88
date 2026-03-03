@@ -1,0 +1,623 @@
+---
+title: Account components
+description: Solana account management components for balances, token accounts, and transaction operations
+---
+
+The account components provide UI and hooks for displaying wallet balances, token holdings, and performing SOL transfers and airdrops.
+
+## Display components
+
+### AccountFeature
+
+Complete account overview screen with balance, token accounts, and action buttons.
+
+<CodeGroup>
+```tsx AccountFeature example
+import { AccountFeature } from "@/components/account/account-feature";
+
+export default function AccountScreen() {
+  return <AccountFeature />;
+}
+```
+</CodeGroup>
+
+<Note>
+  AccountFeature automatically handles wallet connection state and displays `WalletUiButtonConnect` when no wallet is connected.
+</Note>
+
+<Accordion title="Features included">
+  - Pull-to-refresh for updating balances
+  - SOL balance display
+  - Wallet address with ellipsification
+  - Token accounts list
+  - Quick action buttons (Airdrop, Send, Receive)
+</Accordion>
+
+### AccountUiBalance
+
+Displays SOL balance for a given address.
+
+<ParamField path="address" type="PublicKey" required>
+  Wallet public key to fetch balance for.
+</ParamField>
+
+<CodeGroup>
+```tsx AccountUiBalance example
+import { AccountUiBalance } from "@/components/account/account-ui-balance";
+import { useWalletUi } from "@/components/solana/use-wallet-ui";
+
+export function BalanceDisplay() {
+  const { account } = useWalletUi();
+
+  if (!account) return null;
+
+  return <AccountUiBalance address={account.publicKey} />;
+}
+```
+</CodeGroup>
+
+<Note>
+  Balance is automatically converted from lamports to SOL and displays a loading indicator during fetch.
+</Note>
+
+### AccountUiTokenAccounts
+
+Displays a table of all SPL token accounts owned by an address.
+
+<ParamField path="address" type="PublicKey" required>
+  Wallet public key to fetch token accounts for.
+</ParamField>
+
+<CodeGroup>
+```tsx AccountUiTokenAccounts example
+import { AccountUiTokenAccounts } from "@/components/account/account-ui-token-accounts";
+import { useWalletUi } from "@/components/solana/use-wallet-ui";
+
+export function TokenList() {
+  const { account } = useWalletUi();
+
+  if (!account) return null;
+
+  return <AccountUiTokenAccounts address={account.publicKey} />;
+}
+```
+</CodeGroup>
+
+<Note>
+  Fetches both Token Program and Token-2022 Program accounts. Shows "No token accounts found" when list is empty.
+</Note>
+
+### AccountUiTokenBalance
+
+Displays balance for a specific token account.
+
+<ParamField path="address" type="PublicKey" required>
+  Token account public key (not the mint address).
+</ParamField>
+
+<CodeGroup>
+```tsx AccountUiTokenBalance example
+import { AccountUiTokenBalance } from "@/components/account/account-ui-token-balance";
+
+<AccountUiTokenBalance address={tokenAccountPubkey} />
+```
+</CodeGroup>
+
+<Note>
+  Uses `getTokenAccountBalance` RPC method and displays the `uiAmount` value with proper decimals.
+</Note>
+
+### AccountUiButtons
+
+Row of quick action buttons for airdrop, send, and receive flows.
+
+<CodeGroup>
+```tsx AccountUiButtons example
+import { AccountUiButtons } from "@/components/account/account-ui-buttons";
+
+export function QuickActions() {
+  return (
+    <View style={{ marginTop: 16 }}>
+      <AccountUiButtons />
+    </View>
+  );
+}
+```
+</CodeGroup>
+
+<Note>
+  Buttons navigate to `/(tabs)/account/airdrop`, `/(tabs)/account/send`, and `/(tabs)/account/receive` routes.
+</Note>
+
+## Feature components
+
+### AccountFeatureSend
+
+Form for sending SOL to another address.
+
+<ParamField path="address" type="PublicKey" required>
+  Sender's wallet public key.
+</ParamField>
+
+<CodeGroup>
+```tsx AccountFeatureSend example
+import { AccountFeatureSend } from "@/components/account/account-feature-send";
+import { useWalletUi } from "@/components/solana/use-wallet-ui";
+
+export function SendScreen() {
+  const { account } = useWalletUi();
+
+  if (!account) return null;
+
+  return <AccountFeatureSend address={account.publicKey} />;
+}
+```
+</CodeGroup>
+
+<Accordion title="Form fields">
+  - **Amount**: Numeric input for SOL amount to send
+  - **Destination Address**: Text input for recipient public key
+  - **Send SOL**: Submit button that triggers transaction
+</Accordion>
+
+<Note>
+  Uses `useTransferSol` hook for transaction handling and shows loading state during submission.
+</Note>
+
+### AccountFeatureAirdrop
+
+Form for requesting devnet/testnet airdrops.
+
+<ParamField path="address" type="PublicKey" required>
+  Recipient wallet public key.
+</ParamField>
+
+<CodeGroup>
+```tsx AccountFeatureAirdrop example
+import { AccountFeatureAirdrop } from "@/components/account/account-feature-airdrop";
+import { useWalletUi } from "@/components/solana/use-wallet-ui";
+
+export function AirdropScreen() {
+  const { account } = useWalletUi();
+
+  if (!account) return null;
+
+  return <AccountFeatureAirdrop address={account.publicKey} />;
+}
+```
+</CodeGroup>
+
+<Warning>
+  Airdrops only work on devnet and testnet. Mainnet-beta does not support `requestAirdrop`.
+</Warning>
+
+### AccountFeatureReceive
+
+Displays wallet QR code and address for receiving funds.
+
+<ParamField path="address" type="PublicKey" required>
+  Wallet public key to display.
+</ParamField>
+
+<CodeGroup>
+```tsx AccountFeatureReceive example
+import { AccountFeatureReceive } from "@/components/account/account-feature-receive";
+import { useWalletUi } from "@/components/solana/use-wallet-ui";
+
+export function ReceiveScreen() {
+  const { account } = useWalletUi();
+
+  if (!account) return null;
+
+  return <AccountFeatureReceive address={account.publicKey} />;
+}
+```
+</CodeGroup>
+
+## Hooks
+
+### useGetBalance
+
+Fetches SOL balance for an address.
+
+<ParamField path="address" type="PublicKey" required>
+  Wallet public key to query.
+</ParamField>
+
+<ResponseField name="data" type="number">
+  Balance in lamports. Use `lamportsToSol()` utility to convert.
+</ResponseField>
+
+<ResponseField name="isLoading" type="boolean">
+  True while fetching balance.
+</ResponseField>
+
+<ResponseField name="isError" type="boolean">
+  True if query failed.
+</ResponseField>
+
+<ResponseField name="error" type="Error">
+  Error object if query failed.
+</ResponseField>
+
+<CodeGroup>
+```tsx useGetBalance example
+import { useGetBalance } from "@/components/account/use-get-balance";
+import { useWalletUi } from "@/components/solana/use-wallet-ui";
+import { lamportsToSol } from "@/utils/lamports-to-sol";
+
+export function BalanceChecker() {
+  const { account } = useWalletUi();
+  const { data, isLoading } = useGetBalance({
+    address: account?.publicKey
+  });
+
+  if (isLoading) return <Text>Loading...</Text>;
+
+  return <Text>{lamportsToSol(data)} SOL</Text>;
+}
+```
+</CodeGroup>
+
+### useGetBalanceInvalidate
+
+Returns a function to invalidate balance query cache.
+
+<ParamField path="address" type="PublicKey" required>
+  Wallet public key.
+</ParamField>
+
+<CodeGroup>
+```tsx useGetBalanceInvalidate example
+import { useGetBalanceInvalidate } from "@/components/account/use-get-balance";
+
+const invalidateBalance = useGetBalanceInvalidate({ address });
+
+// After transaction:
+await invalidateBalance();
+```
+</CodeGroup>
+
+### useGetTokenAccounts
+
+Fetches all SPL token accounts for an address.
+
+<ParamField path="address" type="PublicKey" required>
+  Wallet public key to query.
+</ParamField>
+
+<ResponseField name="data" type="TokenAccount[]">
+  Array of token account objects with `pubkey`, `account`, and `mint` information.
+</ResponseField>
+
+<ResponseField name="isLoading" type="boolean">
+  True while fetching accounts.
+</ResponseField>
+
+<ResponseField name="isSuccess" type="boolean">
+  True when query completed successfully.
+</ResponseField>
+
+<ResponseField name="isError" type="boolean">
+  True if query failed.
+</ResponseField>
+
+<CodeGroup>
+```tsx useGetTokenAccounts example
+import { useGetTokenAccounts } from "@/components/account/use-get-token-accounts";
+import { useWalletUi } from "@/components/solana/use-wallet-ui";
+
+export function TokenAccountList() {
+  const { account } = useWalletUi();
+  const { data, isLoading } = useGetTokenAccounts({
+    address: account?.publicKey
+  });
+
+  if (isLoading) return <Text>Loading tokens...</Text>;
+
+  return (
+    <View>
+      {data?.map((token) => (
+        <Text key={token.pubkey.toString()}>
+          Mint: {token.account.data.parsed.info.mint}
+        </Text>
+      ))}
+    </View>
+  );
+}
+```
+</CodeGroup>
+
+### useGetTokenAccountBalance
+
+Fetches balance for a specific token account.
+
+<ParamField path="address" type="PublicKey" required>
+  Token account public key.
+</ParamField>
+
+<ResponseField name="data" type="TokenAmount">
+  Object with `value.amount`, `value.decimals`, and `value.uiAmount`.
+</ResponseField>
+
+<CodeGroup>
+```tsx useGetTokenAccountBalance example
+import { useGetTokenAccountBalance } from "@/components/account/use-get-token-account-balance";
+
+const { data } = useGetTokenAccountBalance({ address: tokenAccountPubkey });
+
+console.log(data?.value.uiAmount); // Human-readable balance
+```
+</CodeGroup>
+
+### useTransferSol
+
+Mutation hook for sending SOL transfers.
+
+<ParamField path="address" type="PublicKey" required>
+  Sender's wallet public key.
+</ParamField>
+
+<ResponseField name="mutateAsync" type="function">
+  Async function to execute transfer. Signature: `(input: { destination: PublicKey; amount: number }) => Promise<string>`
+</ResponseField>
+
+<ResponseField name="isPending" type="boolean">
+  True while transaction is being sent.
+</ResponseField>
+
+<ResponseField name="isError" type="boolean">
+  True if transaction failed.
+</ResponseField>
+
+<ResponseField name="error" type="Error">
+  Error object if transaction failed.
+</ResponseField>
+
+<CodeGroup>
+```tsx useTransferSol example
+import { useTransferSol } from "@/components/account/use-transfer-sol";
+import { useWalletUi } from "@/components/solana/use-wallet-ui";
+import { PublicKey } from "@solana/web3.js";
+
+export function SendButton() {
+  const { account } = useWalletUi();
+  const transfer = useTransferSol({ address: account?.publicKey });
+
+  const handleSend = async () => {
+    try {
+      const signature = await transfer.mutateAsync({
+        destination: new PublicKey("7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"),
+        amount: 0.1 // SOL
+      });
+      console.log("Transaction:", signature);
+    } catch (error) {
+      console.error("Failed:", error);
+    }
+  };
+
+  return (
+    <Button
+      onPress={handleSend}
+      disabled={transfer.isPending}
+    >
+      {transfer.isPending ? "Sending..." : "Send 0.1 SOL"}
+    </Button>
+  );
+}
+```
+
+```tsx With error handling
+const transfer = useTransferSol({ address });
+
+const send = async (destination: PublicKey, amount: number) => {
+  try {
+    const signature = await transfer.mutateAsync({
+      destination,
+      amount
+    });
+    Alert.alert("Success", `Transaction: ${signature}`);
+  } catch (error) {
+    Alert.alert("Error", `Failed: ${error.message}`);
+  }
+};
+```
+</CodeGroup>
+
+<Note>
+  Automatically invalidates balance cache on success using `useGetBalanceInvalidate`.
+</Note>
+
+### useRequestAirdrop
+
+Mutation hook for requesting testnet/devnet airdrops.
+
+<ParamField path="address" type="PublicKey" required>
+  Recipient wallet public key.
+</ParamField>
+
+<ResponseField name="mutateAsync" type="function">
+  Async function to request airdrop. Signature: `(amount?: number) => Promise<string>`. Amount defaults to 1 SOL.
+</ResponseField>
+
+<ResponseField name="isPending" type="boolean">
+  True while airdrop is processing.
+</ResponseField>
+
+<ResponseField name="isError" type="boolean">
+  True if airdrop failed.
+</ResponseField>
+
+<CodeGroup>
+```tsx useRequestAirdrop example
+import { useRequestAirdrop } from "@/components/account/use-request-airdrop";
+import { useWalletUi } from "@/components/solana/use-wallet-ui";
+
+export function AirdropButton() {
+  const { account } = useWalletUi();
+  const airdrop = useRequestAirdrop({ address: account?.publicKey });
+
+  const handleAirdrop = async () => {
+    try {
+      const signature = await airdrop.mutateAsync(2); // 2 SOL
+      console.log("Airdrop:", signature);
+    } catch (error) {
+      console.error("Airdrop failed:", error);
+    }
+  };
+
+  return (
+    <Button onPress={handleAirdrop} disabled={airdrop.isPending}>
+      {airdrop.isPending ? "Requesting..." : "Get 2 SOL"}
+    </Button>
+  );
+}
+```
+</CodeGroup>
+
+<Warning>
+  Airdrop requests are rate-limited on devnet. If you encounter errors, wait a few minutes before retrying.
+</Warning>
+
+## Utility functions
+
+### createTransaction
+
+Creates a SOL transfer transaction with proper recent blockhash and fee payer.
+
+<ParamField path="publicKey" type="PublicKey" required>
+  Sender's public key.
+</ParamField>
+
+<ParamField path="destination" type="PublicKey" required>
+  Recipient's public key.
+</ParamField>
+
+<ParamField path="amount" type="number" required>
+  Amount of SOL to transfer.
+</ParamField>
+
+<ParamField path="connection" type="Connection" required>
+  Solana connection instance.
+</ParamField>
+
+<CodeGroup>
+```tsx createTransaction example
+import { createTransaction } from "@/components/account/create-transaction";
+import { useConnection } from "@/components/solana/solana-provider";
+
+const connection = useConnection();
+
+const { transaction, latestBlockhash, minContextSlot } = await createTransaction({
+  publicKey: senderPubkey,
+  destination: recipientPubkey,
+  amount: 0.5,
+  connection
+});
+```
+</CodeGroup>
+
+## Type definitions
+
+<Tabs>
+  <Tab title="TokenAccount">
+    ```tsx
+    interface TokenAccount {
+      pubkey: PublicKey;
+      account: {
+        data: {
+          parsed: {
+            info: {
+              mint: string;
+              owner: string;
+              tokenAmount: {
+                amount: string;
+                decimals: number;
+                uiAmount: number;
+              };
+            };
+          };
+        };
+      };
+    }
+    ```
+  </Tab>
+  <Tab title="TokenAmount">
+    ```tsx
+    interface TokenAmount {
+      value: {
+        amount: string;
+        decimals: number;
+        uiAmount: number;
+        uiAmountString: string;
+      };
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Complete example
+
+<CodeGroup>
+```tsx Full account screen
+import { AccountFeature } from "@/components/account/account-feature";
+import { AppPage } from "@/components/app-page";
+
+export default function AccountScreen() {
+  return (
+    <AppPage>
+      <AccountFeature />
+    </AppPage>
+  );
+}
+```
+
+```tsx Custom account UI
+import { useWalletUi } from "@/components/solana/use-wallet-ui";
+import { AccountUiBalance } from "@/components/account/account-ui-balance";
+import { AccountUiTokenAccounts } from "@/components/account/account-ui-token-accounts";
+import { useGetBalanceInvalidate } from "@/components/account/use-get-balance";
+import { RefreshControl, ScrollView, View } from "react-native";
+import { useState } from "react";
+
+export function CustomAccountView() {
+  const { account } = useWalletUi();
+  const [refreshing, setRefreshing] = useState(false);
+  const invalidateBalance = useGetBalanceInvalidate({
+    address: account?.publicKey
+  });
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await invalidateBalance();
+    setRefreshing(false);
+  };
+
+  if (!account) return null;
+
+  return (
+    <ScrollView
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
+      <View>
+        <AccountUiBalance address={account.publicKey} />
+        <AccountUiTokenAccounts address={account.publicKey} />
+      </View>
+    </ScrollView>
+  );
+}
+```
+</CodeGroup>
+
+## Related components
+
+<CardGroup cols={2}>
+  <Card title="Wallet components" icon="wallet" href="/api/components/wallet">
+    Connection and wallet UI components
+  </Card>
+  <Card title="Solana provider" icon="plug" href="/api/providers/solana">
+    Connection context and hooks
+  </Card>
+</CardGroup>

@@ -1,0 +1,394 @@
+---
+title: Chat components
+description: AI-powered chat interface components for building conversational experiences in Synto Mobile
+---
+
+The chat components provide a complete conversational AI interface with message rendering, input handling, history management, and tool execution capabilities.
+
+## Core components
+
+### ChatList
+
+Displays a scrollable list of chat messages with loading states and tool results.
+
+<ParamField path="messages" type="Message[]" required>
+  Array of messages from the AI SDK. Each message contains `id`, `role`, `content`, and optional `parts` for tool invocations.
+</ParamField>
+
+<ParamField path="isLoading" type="boolean" required>
+  Indicates if the AI is currently generating a response.
+</ParamField>
+
+<ParamField path="loadingSubmit" type="boolean">
+  Shows a "Thinking..." indicator when a new message is being submitted.
+</ParamField>
+
+<ParamField path="reload" type="function" required>
+  Function to regenerate the last AI response. Signature: `(chatRequestOptions?: any) => Promise<string | null | undefined>`
+</ParamField>
+
+<ParamField path="addToolResult" type="function">
+  Callback to add tool execution results back to the conversation. Signature: `(args: { toolCallId: string; result: string }) => void`
+</ParamField>
+
+<CodeGroup>
+```tsx ChatList example
+import ChatList from "@/components/chat/chat-list";
+import { useChat } from "@ai-sdk/react";
+
+export function ChatScreen() {
+  const { messages, isLoading, reload, addToolResult } = useChat();
+
+  return (
+    <ChatList
+      messages={messages}
+      isLoading={isLoading}
+      reload={reload}
+      addToolResult={addToolResult}
+    />
+  );
+}
+```
+
+```tsx With loading state
+<ChatList
+  messages={messages}
+  isLoading={isLoading}
+  loadingSubmit={isSubmitting}
+  reload={reload}
+  addToolResult={addToolResult}
+/>
+```
+</CodeGroup>
+
+### ChatMessage
+
+Renders individual chat messages with support for text content, tool invocations, and action buttons.
+
+<ParamField path="message" type="Message" required>
+  Message object containing `id`, `role` ("user" | "assistant"), `content`, and optional `parts` array for structured content.
+</ParamField>
+
+<ParamField path="isLast" type="boolean" required>
+  Whether this is the last message in the conversation. Controls visibility of regenerate button.
+</ParamField>
+
+<ParamField path="isLoading" type="boolean" required>
+  Indicates if the AI is currently generating content.
+</ParamField>
+
+<ParamField path="reload" type="function" required>
+  Function to regenerate this message.
+</ParamField>
+
+<ParamField path="addToolResult" type="function">
+  Callback for tool execution results.
+</ParamField>
+
+<Note>
+  Messages with `role: "user"` are styled differently and aligned to the right. Assistant messages include copy and regenerate buttons.
+</Note>
+
+<CodeGroup>
+```tsx ChatMessage example
+import ChatMessage from "@/components/chat/chat-message";
+
+<ChatMessage
+  message={{
+    id: "msg-1",
+    role: "assistant",
+    content: "Hello! How can I help you today?"
+  }}
+  isLast={true}
+  isLoading={false}
+  reload={reload}
+/>
+```
+
+```tsx With tool invocation
+<ChatMessage
+  message={{
+    id: "msg-2",
+    role: "assistant",
+    parts: [
+      { type: "text", text: "Let me check your balance..." },
+      {
+        type: "tool-invocation",
+        toolInvocation: {
+          toolCallId: "call-123",
+          toolName: "BALANCE_ACTION",
+          args: { address: "7xKXtg..." }
+        }
+      }
+    ]
+  }}
+  isLast={true}
+  isLoading={false}
+  reload={reload}
+  addToolResult={addToolResult}
+/>
+```
+</CodeGroup>
+
+### ChatInput
+
+Multi-line text input with submit button and microphone icon.
+
+<ParamField path="value" type="string" required>
+  Current input text value.
+</ParamField>
+
+<ParamField path="onChangeText" type="function" required>
+  Callback when input text changes. Signature: `(text: string) => void`
+</ParamField>
+
+<ParamField path="onSubmit" type="function" required>
+  Callback when user submits the message.
+</ParamField>
+
+<ParamField path="isLoading" type="boolean" required>
+  Disables submit button when true.
+</ParamField>
+
+<CodeGroup>
+```tsx ChatInput example
+import { ChatInput } from "@/components/chat/chat-input";
+import { useState } from "react";
+
+export function ChatScreen() {
+  const [input, setInput] = useState("");
+  const { isLoading, append } = useChat();
+
+  const handleSubmit = () => {
+    if (input.trim()) {
+      append({ role: "user", content: input });
+      setInput("");
+    }
+  };
+
+  return (
+    <ChatInput
+      value={input}
+      onChangeText={setInput}
+      onSubmit={handleSubmit}
+      isLoading={isLoading}
+    />
+  );
+}
+```
+</CodeGroup>
+
+### ChatHeader
+
+Top navigation bar with history, title, and new chat buttons.
+
+<ParamField path="onHistoryPress" type="function" required>
+  Callback when history button is pressed.
+</ParamField>
+
+<ParamField path="onNewChatPress" type="function" required>
+  Callback when new chat button is pressed.
+</ParamField>
+
+<ParamField path="chatTitle" type="string">
+  Title displayed in the center. Defaults to "New Chat" if not provided.
+</ParamField>
+
+<CodeGroup>
+```tsx ChatHeader example
+import { ChatHeader } from "@/components/chat/chat-header";
+import { useState } from "react";
+
+export function ChatScreen() {
+  const [showHistory, setShowHistory] = useState(false);
+
+  return (
+    <ChatHeader
+      onHistoryPress={() => setShowHistory(true)}
+      onNewChatPress={handleNewChat}
+      chatTitle="Solana Trading"
+    />
+  );
+}
+```
+</CodeGroup>
+
+## Feature components
+
+### SuggestionCards
+
+Horizontal scrollable list of suggested prompts with tool logos.
+
+<ParamField path="onSuggestionPress" type="function" required>
+  Callback when a suggestion is tapped. Receives the suggestion text as parameter. Signature: `(suggestion: string) => void`
+</ParamField>
+
+<CodeGroup>
+```tsx SuggestionCards example
+import { SuggestionCards } from "@/components/chat/suggestion-cards";
+
+export function WelcomeScreen() {
+  const { append } = useChat();
+
+  return (
+    <SuggestionCards
+      onSuggestionPress={(text) => {
+        append({ role: "user", content: text });
+      }}
+    />
+  );
+}
+```
+</CodeGroup>
+
+<Note>
+  Built-in suggestions include Jupiter swap, Rainfi lending, Lulo deposits, and Jupiter staking prompts.
+</Note>
+
+### HistoryOverlay
+
+Slide-in panel for browsing conversation history with search and delete functionality.
+
+<ParamField path="visible" type="boolean" required>
+  Controls overlay visibility.
+</ParamField>
+
+<ParamField path="onClose" type="function" required>
+  Callback when overlay is closed.
+</ParamField>
+
+<ParamField path="onSelectConversation" type="function" required>
+  Callback when a conversation is selected. Signature: `(conversationId: string) => void`
+</ParamField>
+
+<ParamField path="onNewChat" type="function" required>
+  Callback when new chat button is pressed.
+</ParamField>
+
+<ParamField path="onDeleteChat" type="function" required>
+  Callback when a chat is deleted. Signature: `(chatId: string) => void`
+</ParamField>
+
+<ParamField path="conversations" type="ChatMetadata[]" required>
+  Array of conversation metadata objects with `id`, `title`, `lastMessage`, `messageCount`, and `updatedAt` timestamp.
+</ParamField>
+
+<ParamField path="currentChatId" type="string | null" required>
+  ID of the currently active chat for highlighting.
+</ParamField>
+
+<CodeGroup>
+```tsx HistoryOverlay example
+import { HistoryOverlay } from "@/components/chat/history-overlay";
+import { useState } from "react";
+
+export function ChatScreen() {
+  const [historyVisible, setHistoryVisible] = useState(false);
+  const [conversations, setConversations] = useState([]);
+  const [currentChatId, setCurrentChatId] = useState(null);
+
+  return (
+    <HistoryOverlay
+      visible={historyVisible}
+      onClose={() => setHistoryVisible(false)}
+      onSelectConversation={(id) => {
+        loadConversation(id);
+        setHistoryVisible(false);
+      }}
+      onNewChat={createNewChat}
+      onDeleteChat={deleteConversation}
+      conversations={conversations}
+      currentChatId={currentChatId}
+    />
+  );
+}
+```
+</CodeGroup>
+
+### ToolManager
+
+Displays tool invocation cards with execution buttons and results.
+
+<ParamField path="toolInvocation" type="ToolInvocation" required>
+  Object containing `toolCallId`, `toolName`, `args`, and optional `result`.
+</ParamField>
+
+<ParamField path="addToolResult" type="function">
+  Callback to add execution results. Signature: `(args: { toolCallId: string; result: string }) => void`
+</ParamField>
+
+<CodeGroup>
+```tsx ToolManager example
+import ToolManager from "@/components/chat/tool-manager";
+
+<ToolManager
+  toolInvocation={{
+    toolCallId: "call-123",
+    toolName: "TRADE",
+    args: {
+      inputToken: "SOL",
+      outputToken: "USDC",
+      amount: 0.001
+    }
+  }}
+  addToolResult={addToolResult}
+/>
+```
+</CodeGroup>
+
+<Note>
+  ToolManager automatically displays appropriate logos for DeFi protocols like Jupiter, Lulo, Rainfi, and DexScreener.
+</Note>
+
+## Type definitions
+
+<Tabs>
+  <Tab title="Message">
+    ```tsx
+    interface Message {
+      id: string;
+      role: "user" | "assistant" | "system";
+      content: string;
+      parts?: MessagePart[];
+    }
+
+    interface MessagePart {
+      type: "text" | "tool-invocation";
+      text?: string;
+      toolInvocation?: ToolInvocation;
+    }
+    ```
+  </Tab>
+  <Tab title="ToolInvocation">
+    ```tsx
+    interface ToolInvocation {
+      toolCallId: string;
+      toolName: string;
+      args: any;
+      result?: string;
+    }
+    ```
+  </Tab>
+  <Tab title="ChatMetadata">
+    ```tsx
+    interface ChatMetadata {
+      id: string;
+      title: string;
+      lastMessage: string;
+      messageCount: number;
+      updatedAt: number;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Related hooks
+
+<CardGroup cols={2}>
+  <Card title="useChat" icon="message" href="/api/hooks/chat">
+    AI SDK React hook for chat functionality
+  </Card>
+  <Card title="useSolanaAgent" icon="robot" href="/api/hooks/solana">
+    Hook for Solana agent and tool execution
+  </Card>
+</CardGroup>

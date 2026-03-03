@@ -1,0 +1,189 @@
+---
+title: DeFi plugin
+description: Access decentralized finance operations on Solana through the DeFi plugin
+---
+
+The DeFi plugin provides seamless integration with decentralized finance protocols on Solana, enabling your AI agent to perform lending, borrowing, and loan management operations through RainFi.
+
+## Features
+
+The DeFi plugin offers four core capabilities:
+
+<CardGroup cols={2}>
+  <Card title="Loan quotes" icon="calculator">
+    Calculate loan quotes with optimal interest rates and terms
+  </Card>
+  <Card title="Loan execution" icon="handshake">
+    Build and execute collateralized loan transactions
+  </Card>
+  <Card title="Loan management" icon="list">
+    Retrieve all active loans for a wallet address
+  </Card>
+  <Card title="Loan repayment" icon="rotate-left">
+    Repay outstanding loans and reclaim collateral
+  </Card>
+</CardGroup>
+
+## Installation
+
+The DeFi plugin is included in the Synto Mobile SDK. Initialize it when configuring your agent:
+
+```typescript
+import DefiPlugin from '@/utils/syntoUtils/agent/plugins/plugin-defi';
+import { SolanaAgentKit } from '@/utils/syntoUtils/agent';
+
+const agent = new SolanaAgentKit(
+  privateKey,
+  rpcUrl,
+  openAiApiKey
+);
+
+// Plugin is automatically available
+agent.defi.quoteLoanCalculator(params);
+```
+
+## Plugin structure
+
+The plugin exports methods and actions that work together:
+
+<CodeGroup>
+```typescript Plugin definition
+const DefiPlugin = {
+  name: "defi",
+  
+  methods: {
+    quoteLoanCalculator,
+    RainfiTransactionBuilder,
+    GetUserLoans,
+    RepayLoan,
+  },
+  
+  actions: [
+    quoteLoanCalculatorAction,
+    rainfiTransactionBuilderAction,
+    rainfiGetUserLoansAction,
+    rainfiRepayLoanAction,
+  ],
+  
+  initialize: function (agent: SolanaAgentKit): void {
+    // Binds all methods to the agent instance
+  },
+};
+```
+
+```typescript Type definitions
+interface LoanTransactionRequest {
+  borrower: string;
+  amountIn: number;
+  currencyIn: string;
+  currencyOut: string;
+  simulation: LoanSimulation;
+  slippage: number;
+  options: TransactionOptions;
+}
+
+interface LoanSimulation {
+  amount: number;
+  duration: number;
+  interest: string;
+  rainFees: number;
+  apr: number;
+  currency: string;
+  bank: string;
+  authorization: string;
+  pool: string;
+  baseAmount: number;
+}
+```
+</CodeGroup>
+
+## API endpoint
+
+All operations communicate with the RainFi API:
+
+<ParamField path="RAINFI_API" type="string" default="https://api-v3.rain.fi">
+  Base URL for all RainFi protocol operations
+</ParamField>
+
+## Available operations
+
+<CardGroup cols={1}>
+  <Card title="RainFi loans" href="/api/defi/rainfi-loans" icon="coins">
+    Complete API reference for RainFi loan operations including quotes, execution, management, and repayment
+  </Card>
+</CardGroup>
+
+## Error handling
+
+All DeFi operations return structured responses with error handling:
+
+```typescript
+try {
+  const quote = await agent.defi.quoteLoanCalculator({
+    amountIn: 1000000000,
+    currencyIn: "So11111111111111111111111111111111111111112",
+    currencyOut: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    borrower: walletAddress,
+  });
+  
+  return {
+    status: "success",
+    message: "Loan quote calculated successfully",
+    loanTransactionRequest: quote,
+  };
+} catch (error) {
+  return {
+    status: "error",
+    message: error.message,
+  };
+}
+```
+
+## Common error messages
+
+<ResponseField name="No loan quote found" type="error">
+  No available loans match the requested parameters. Try increasing the amount or using different currencies.
+</ResponseField>
+
+<ResponseField name="API request failed" type="error">
+  The RainFi API returned an error. Check the status code and message for details.
+</ResponseField>
+
+<ResponseField name="Failed to parse API response as JSON" type="error">
+  The API response was invalid. This may indicate a temporary service issue.
+</ResponseField>
+
+<ResponseField name="Invalid transaction: No account keys found" type="error">
+  The transaction builder returned an invalid transaction. Verify all parameters are correct.
+</ResponseField>
+
+## Best practices
+
+<Steps>
+  <Step title="Use currency addresses">
+    Always use full Solana addresses for currencies, not symbols. For example, use `"So11111111111111111111111111111111111111112"` for SOL.
+  </Step>
+  
+  <Step title="Display quotes before execution">
+    Show loan quotes to users in a readable format before executing transactions. Include APR, duration, fees, and total repayment amount.
+  </Step>
+  
+  <Step title="Handle amounts correctly">
+    All amounts are in the smallest unit (lamports for SOL, base units for tokens). Convert to decimals for display.
+  </Step>
+  
+  <Step title="Validate loan status">
+    Before attempting repayment, verify the loan exists and is in "Ongoing" status using GetUserLoans.
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="RainFi loans" href="/api/defi/rainfi-loans" icon="book">
+    Detailed API reference for all RainFi operations
+  </Card>
+  <Card title="AI agent actions" href="/ai-agent/actions" icon="robot">
+    Learn how actions work with the AI agent
+  </Card>
+</CardGroup>

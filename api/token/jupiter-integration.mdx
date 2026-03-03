@@ -1,0 +1,578 @@
+---
+title: "Jupiter integration"
+description: "Swap tokens and stake SOL using Jupiter Exchange aggregator"
+---
+
+The Token Plugin integrates with Jupiter Exchange to provide token swaps, price fetching, and liquid staking capabilities. Jupiter aggregates liquidity from multiple DEXs to provide the best rates.
+
+## trade
+
+Swap tokens using Jupiter Exchange's aggregator, which finds the best route across multiple DEXs.
+
+### Function signature
+
+```typescript
+function trade(
+  agent: SolanaAgentKit,
+  outputMint: PublicKey,
+  inputAmount: number,
+  inputMint?: PublicKey,
+  slippageBps?: number
+): Promise<string | VersionedTransaction>
+```
+
+### Parameters
+
+<ParamField path="agent" type="SolanaAgentKit" required>
+  The agent instance containing wallet credentials and connection
+</ParamField>
+
+<ParamField path="outputMint" type="PublicKey" required>
+  Target token mint address (the token you want to receive)
+</ParamField>
+
+<ParamField path="inputAmount" type="number" required>
+  Amount to swap in UI units (e.g., 10 for 10 USDC, not raw decimals)
+</ParamField>
+
+<ParamField path="inputMint" type="PublicKey" optional default="USDC">
+  Source token mint address (the token you're swapping from). Defaults to USDC if not provided
+</ParamField>
+
+<ParamField path="slippageBps" type="number" optional default="300">
+  **Deprecated**: Use dynamic slippage instead. Slippage tolerance in basis points (300 = 3%). The function now uses Jupiter's dynamic slippage by default
+</ParamField>
+
+### Returns
+
+<ResponseField name="signature" type="string">
+  Transaction signature if the swap was executed on-chain
+</ResponseField>
+
+<ResponseField name="transaction" type="VersionedTransaction">
+  Signed transaction object if agent is in `signOnly` mode
+</ResponseField>
+
+### Example usage
+
+<CodeGroup>
+```typescript Swap USDC for SOL
+import { trade } from '@/utils/syntoUtils/agent/plugins/plugin-token/jupiter/tools';
+import { PublicKey } from '@solana/web3.js';
+import { TOKENS } from '@/utils/syntoUtils/agent/plugins/plugin-token/jupiter/tools/utils/constants';
+
+// Swap 100 USDC for SOL
+const signature = await trade(
+  agent,
+  TOKENS.SOL,        // Output: SOL
+  100,               // Amount: 100 USDC
+  TOKENS.USDC        // Input: USDC
+);
+
+console.log(`Swap complete: https://solscan.io/tx/${signature}`);
+```
+
+```typescript Swap SOL for any token
+import { trade } from '@/utils/syntoUtils/agent/plugins/plugin-token/jupiter/tools';
+import { PublicKey } from '@solana/web3.js';
+import { TOKENS } from '@/utils/syntoUtils/agent/plugins/plugin-token/jupiter/tools/utils/constants';
+
+// Swap 1 SOL for BONK
+const bonkMint = new PublicKey('DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263');
+const signature = await trade(
+  agent,
+  bonkMint,          // Output: BONK
+  1,                 // Amount: 1 SOL
+  TOKENS.SOL         // Input: SOL
+);
+```
+
+```typescript Using the action handler
+import tradeAction from '@/utils/syntoUtils/agent/plugins/plugin-token/jupiter/actions/trade';
+
+const result = await tradeAction.handler(agent, {
+  outputMint: 'So11111111111111111111111111111111111111112',
+  inputAmount: 100,
+  inputMint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+});
+
+console.log(result);
+// Output:
+// {
+//   status: 'success',
+//   message: 'Trade executed successfully',
+//   transaction: '4VfgJ5vVZxUxefDGqzqkVLHzHxVTyYH9...',
+//   inputAmount: 100,
+//   inputToken: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+//   outputToken: 'So11111111111111111111111111111111111111112'
+// }
+```
+</CodeGroup>
+
+## How Jupiter swaps work
+
+The trade function performs the following steps:
+
+### 1. Decimal conversion
+
+Converts the input amount from UI units to the token's raw decimal representation:
+
+```typescript
+const inputDecimals = isNativeSol ? 9 : (await getMintInfo(agent.connection, inputMint.toBase58())).decimals;
+const scaledAmount = inputAmount * Math.pow(10, inputDecimals);
+```
+
+### 2. Fetch quote
+
+Requests a quote from Jupiter's API with optimized parameters:
+
+```typescript
+const quoteResponse = await fetch(
+  `${JUP_API}/quote?` +
+  `inputMint=${inputMint.toString()}` +
+  `&outputMint=${outputMint.toString()}` +
+  `&amount=${scaledAmount}` +
+  `&dynamicSlippage=true` +          // Auto-adjusts slippage
+  `&minimizeSlippage=false` +        // Prioritizes best rate
+  `&onlyDirectRoutes=false` +        // Allows multi-hop routes
+  `&maxAccounts=64` +                // Max accounts in transaction
+  `&swapMode=ExactIn`                // Exact input amount
+).then(r => r.json());
+```
+
+### 3. Get swap transaction
+
+Converts the quote into a signed transaction:
+
+```typescript
+const { swapTransaction } = await fetch('https://quote-api.jup.ag/v6/swap', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    quoteResponse,
+    userPublicKey: agent.wallet.publicKey.toString(),
+    wrapAndUnwrapSol: true,           // Auto-wrap/unwrap SOL
+    dynamicComputeUnitLimit: true,    // Optimize compute units
+    dynamicSlippage: true,            // Use dynamic slippage
+    prioritizationFeeLamports: {
+      priorityLevelWithMaxLamports: {
+        maxLamports: 10000000,        // Max priority fee
+        priorityLevel: agent.config?.PRIORITY_LEVEL || 'medium'
+      }
+    },
+    feeAccount: feeAccount?.toString() // Optional referral account
+  })
+}).then(r => r.json());
+```
+
+### 4. Execute transaction
+
+Signs and sends the transaction to the network:
+
+```typescript
+const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
+const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
+
+return await signOrSendTX(agent, transaction);
+```
+
+<Info>
+  Jupiter automatically handles SOL wrapping/unwrapping, route optimization, and slippage protection.
+</Info>
+
+## Token constants
+
+The plugin provides commonly-used token addresses:
+
+```typescript
+import { TOKENS } from '@/utils/syntoUtils/agent/plugins/plugin-token/jupiter/tools/utils/constants';
+
+console.log(TOKENS.SOL);   // So11111111111111111111111111111111111111112
+console.log(TOKENS.USDC);  // EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
+console.log(TOKENS.SEND);  // SENDdRQtYMWaQrBroBrJ2Q53fgVuq95CV9UPGEvpCxa
+```
+
+---
+
+## stakeWithJup
+
+Stake SOL with Jupiter's validator to receive jupSOL, a liquid staking token that accrues staking rewards.
+
+### Function signature
+
+```typescript
+function stakeWithJup(
+  agent: SolanaAgentKit,
+  amount: number
+): Promise<string | VersionedTransaction>
+```
+
+### Parameters
+
+<ParamField path="agent" type="SolanaAgentKit" required>
+  The agent instance containing wallet credentials
+</ParamField>
+
+<ParamField path="amount" type="number" required>
+  Amount of SOL to stake (in UI units, e.g., 1.5 for 1.5 SOL)
+</ParamField>
+
+### Returns
+
+<ResponseField name="signature" type="string">
+  Transaction signature if staking was executed
+</ResponseField>
+
+<ResponseField name="transaction" type="VersionedTransaction">
+  Signed transaction if agent is in `signOnly` mode
+</ResponseField>
+
+### Example usage
+
+<CodeGroup>
+```typescript Stake SOL for jupSOL
+import { stakeWithJup } from '@/utils/syntoUtils/agent/plugins/plugin-token/jupiter/tools';
+
+// Stake 10 SOL
+const signature = await stakeWithJup(agent, 10);
+
+console.log(`Staked 10 SOL for jupSOL`);
+console.log(`Transaction: https://solscan.io/tx/${signature}`);
+```
+
+```typescript Using the action handler
+import stakeWithJupAction from '@/utils/syntoUtils/agent/plugins/plugin-token/jupiter/actions/stakeWithJup';
+
+const result = await stakeWithJupAction.handler(agent, {
+  amount: 5
+});
+
+console.log(result);
+// Output:
+// {
+//   status: 'success',
+//   transaction: '5KtPn3...',
+//   message: 'Successfully staked 5 SOL for jupSOL'
+// }
+```
+</CodeGroup>
+
+### How it works
+
+The function uses Jupiter's Blinks API to create a staking transaction:
+
+```typescript
+const res = await fetch(
+  `https://worker.jup.ag/blinks/swap/So11111111111111111111111111111111111111112/jupSoLaHXQiZZTSfEWMTRRgpnyFm8f6sZdosWBjx93v/${amount}`,
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      account: agent.wallet.publicKey.toBase58()
+    })
+  }
+);
+
+const data = await res.json();
+const txn = VersionedTransaction.deserialize(Buffer.from(data.transaction, 'base64'));
+
+return await signOrSendTX(agent, txn);
+```
+
+<Note>
+  jupSOL is a liquid staking token, meaning you can use it in DeFi protocols while still earning staking rewards. The exchange rate between SOL and jupSOL increases over time as rewards accrue.
+</Note>
+
+---
+
+## fetchPrice
+
+Fetch the current price of a token in USDC using Jupiter's price API.
+
+### Function signature
+
+```typescript
+function fetchPrice(tokenId: PublicKey): Promise<string>
+```
+
+### Parameters
+
+<ParamField path="tokenId" type="PublicKey" required>
+  The token mint address to fetch the price for
+</ParamField>
+
+### Returns
+
+<ResponseField name="price" type="string">
+  The token's price in USDC as a string (e.g., "3.45")
+</ResponseField>
+
+### Example usage
+
+<CodeGroup>
+```typescript Get SOL price
+import { fetchPrice } from '@/utils/syntoUtils/agent/plugins/plugin-token/jupiter/tools';
+import { TOKENS } from '@/utils/syntoUtils/agent/plugins/plugin-token/jupiter/tools/utils/constants';
+
+const price = await fetchPrice(TOKENS.SOL);
+console.log(`SOL price: $${price} USDC`);
+// Output: SOL price: $98.50 USDC
+```
+
+```typescript Get custom token price
+import { fetchPrice } from '@/utils/syntoUtils/agent/plugins/plugin-token/jupiter/tools';
+import { PublicKey } from '@solana/web3.js';
+
+const bonkMint = new PublicKey('DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263');
+const price = await fetchPrice(bonkMint);
+console.log(`BONK price: $${price} USDC`);
+```
+
+```typescript Display portfolio value
+import { fetchPrice } from '@/utils/syntoUtils/agent/plugins/plugin-token/jupiter/tools';
+import { get_token_balance } from '@/utils/syntoUtils/agent/plugins/plugin-token/solana/tools';
+import { TOKENS } from '@/utils/syntoUtils/agent/plugins/plugin-token/jupiter/tools/utils/constants';
+
+const balances = await get_token_balance(agent);
+
+// Get SOL value
+const solPrice = await fetchPrice(TOKENS.SOL);
+const solValue = balances.sol * parseFloat(solPrice);
+
+console.log(`Portfolio value: $${solValue.toFixed(2)} USD`);
+```
+</CodeGroup>
+
+### How it works
+
+The function queries Jupiter's price API v2:
+
+```typescript
+const response = await fetch(
+  `https://api.jup.ag/price/v2?ids=${tokenId.toBase58()}`
+);
+
+const data = await response.json();
+const price = data.data[tokenId.toBase58()]?.price;
+
+if (!price) {
+  throw new Error('Price data not available for the given token.');
+}
+
+return price;
+```
+
+<Warning>
+  If price data is not available for a token (e.g., new or unlisted tokens), the function throws an error. Always wrap price fetches in try-catch blocks.
+</Warning>
+
+---
+
+## Trade action
+
+The Trade action enables AI-driven natural language swaps with these triggers:
+
+<ResponseField name="similes" type="string[]">
+  - "swap tokens"
+  - "exchange tokens"
+  - "trade tokens"
+  - "convert tokens"
+  - "swap sol"
+</ResponseField>
+
+### Action schema
+
+```typescript
+schema: z.object({
+  outputMint: z.string().min(32, "Invalid output mint address"),
+  inputAmount: z.number().positive("Input amount must be positive"),
+  inputMint: z.string().min(32, "Invalid input mint address").optional(),
+  slippageBps: z.number().min(0).max(10000).optional(),
+})
+```
+
+### Natural language examples
+
+With the action registered, users can say:
+
+- "Swap 10 SOL for USDC"
+- "Exchange 100 USDC for BONK"
+- "Trade 50 USDC to SOL"
+- "Convert tokens"
+
+---
+
+## Stake action
+
+The Stake action enables AI-driven liquid staking with these triggers:
+
+<ResponseField name="similes" type="string[]">
+  - "stake sol"
+  - "stake with jupiter"
+  - "jup staking"
+  - "stake with jup"
+  - "liquid staking"
+  - "get jupsol"
+</ResponseField>
+
+### Action schema
+
+```typescript
+schema: z.object({
+  amount: z.number().positive().describe("Amount of SOL to stake"),
+})
+```
+
+---
+
+## Configuration options
+
+The Jupiter integration respects several agent configuration options:
+
+<ParamField path="JUPITER_FEE_BPS" type="number" optional>
+  Platform fee in basis points (e.g., 50 = 0.5% fee). Deducted from swap output
+</ParamField>
+
+<ParamField path="JUPITER_REFERRAL_ACCOUNT" type="string" optional>
+  Referral account public key for earning referral fees
+</ParamField>
+
+<ParamField path="PRIORITY_LEVEL" type="string" optional default="medium">
+  Transaction priority level: `"low"`, `"medium"`, `"high"`, or `"veryHigh"`
+</ParamField>
+
+### Example configuration
+
+```typescript
+const agent = new SolanaAgentKit({
+  config: {
+    JUPITER_FEE_BPS: 50,                    // 0.5% platform fee
+    JUPITER_REFERRAL_ACCOUNT: 'YOUR_PUBKEY_HERE',
+    PRIORITY_LEVEL: 'high',                 // Faster transaction confirmation
+  }
+});
+```
+
+---
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Check prices before swapping" icon="magnifying-glass-dollar">
+    Always verify the expected output amount before executing a swap:
+    
+    ```typescript
+    import { fetchPrice } from '@/utils/syntoUtils/agent/plugins/plugin-token/jupiter/tools';
+    
+    const solPrice = await fetchPrice(TOKENS.SOL);
+    const expectedOutput = inputAmount / parseFloat(solPrice);
+    
+    console.log(`Swapping ${inputAmount} USDC for ~${expectedOutput.toFixed(4)} SOL`);
+    
+    const signature = await trade(agent, TOKENS.SOL, inputAmount, TOKENS.USDC);
+    ```
+  </Accordion>
+  
+  <Accordion title="Handle slippage appropriately" icon="gauge-high">
+    Jupiter uses dynamic slippage by default, but monitor for high-slippage scenarios:
+    
+    ```typescript
+    try {
+      const signature = await trade(agent, outputMint, inputAmount, inputMint);
+    } catch (error) {
+      if (error.message.includes('slippage')) {
+        console.error('Slippage tolerance exceeded. Try again or increase slippage.');
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Use priority fees for time-sensitive swaps" icon="bolt">
+    Set higher priority levels for swaps during periods of high network congestion:
+    
+    ```typescript
+    agent.config.PRIORITY_LEVEL = 'high'; // Faster confirmation
+    const signature = await trade(agent, outputMint, inputAmount, inputMint);
+    ```
+  </Accordion>
+  
+  <Accordion title="Monitor jupSOL exchange rate" icon="chart-line">
+    The jupSOL/SOL exchange rate increases over time. Check the current rate before staking:
+    
+    ```typescript
+    // Get jupSOL mint
+    const jupSolMint = new PublicKey('jupSoLaHXQiZZTSfEWMTRRgpnyFm8f6sZdosWBjx93v');
+    
+    // This would require additional Jupiter API calls to get the exact rate
+    // For production, consider implementing a rate-checking function
+    ```
+  </Accordion>
+  
+  <Accordion title="Batch operations for better UX" icon="layer-group">
+    When performing multiple operations, execute them sequentially with status updates:
+    
+    ```typescript
+    async function swapAndStake(agent: SolanaAgentKit, usdcAmount: number) {
+      // Step 1: Swap USDC for SOL
+      console.log('Swapping USDC for SOL...');
+      await trade(agent, TOKENS.SOL, usdcAmount, TOKENS.USDC);
+      
+      // Step 2: Get new SOL balance
+      const solBalance = await get_balance(agent);
+      
+      // Step 3: Stake most of the SOL (leave some for fees)
+      const stakeAmount = solBalance - 0.01;
+      console.log(`Staking ${stakeAmount} SOL...`);
+      await stakeWithJup(agent, stakeAmount);
+      
+      console.log('Complete!');
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Common errors
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| "Swap failed: insufficient balance" | Not enough input tokens | Check balance before swapping |
+| "Price data not available" | Token not listed on Jupiter | Use a different price source or DEX |
+| "Slippage tolerance exceeded" | Price moved beyond acceptable range | Retry with higher slippage or wait |
+| "jupSOL staking failed" | Network issues or invalid amount | Ensure amount > 0 and network is stable |
+| "Invalid mint address" | Malformed token address | Validate addresses before calling |
+
+---
+
+## Default options
+
+The plugin defines default configuration values:
+
+```typescript
+export const DEFAULT_OPTIONS = {
+  SLIPPAGE_BPS: 300,          // 3% slippage (deprecated, uses dynamic)
+  TOKEN_DECIMALS: 9,          // Default decimals for new tokens
+  RERERRAL_FEE: 200,          // 2% referral fee
+  LEVERAGE_BPS: 50000,        // 5x leverage (for PERP trading)
+};
+```
+
+---
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Balance operations" icon="scale-balanced" href="/api/token/balance-operations">
+    Check token balances
+  </Card>
+  <Card title="Transfer functions" icon="paper-plane" href="/api/token/transfer">
+    Send tokens after swapping
+  </Card>
+  <Card title="DeFi plugin" icon="building-columns" href="/api/defi/overview">
+    Lend and borrow with RainFi
+  </Card>
+  <Card title="Token operations guide" icon="book" href="/guides/token-operations">
+    End-to-end token operation examples
+  </Card>
+</CardGroup>

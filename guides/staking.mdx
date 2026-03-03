@@ -1,0 +1,468 @@
+---
+title: Staking with Jupiter
+description: Learn how to stake SOL and earn rewards with Jupiter's liquid staking in Synto Mobile
+---
+
+Stake your SOL with Jupiter to earn staking rewards while maintaining liquidity. Receive jupSOL tokens that represent your staked SOL plus accumulated rewards.
+
+## What is liquid staking?
+
+**Liquid staking** allows you to:
+- Earn staking rewards on your SOL
+- Maintain liquidity with jupSOL tokens
+- Use jupSOL in DeFi while earning staking rewards
+- Unstake anytime without waiting periods
+
+<Note>
+jupSOL is a liquid staking token that appreciates in value relative to SOL as staking rewards accumulate.
+</Note>
+
+## How liquid staking works
+
+<Steps>
+  <Step title="Stake SOL">
+    You deposit SOL with Jupiter's liquid staking protocol.
+  </Step>
+  
+  <Step title="Receive jupSOL">
+    You receive jupSOL tokens representing your staked SOL (1:1 initial ratio).
+  </Step>
+  
+  <Step title="Earn rewards">
+    Jupiter stakes your SOL with validators. Rewards accumulate automatically.
+  </Step>
+  
+  <Step title="jupSOL appreciates">
+    As rewards accumulate, jupSOL becomes worth more SOL over time.
+  </Step>
+  
+  <Step title="Use or unstake">
+    Use jupSOL in DeFi or swap back to SOL anytime via Jupiter Exchange.
+  </Step>
+</Steps>
+
+## Staking SOL
+
+### Stake with AI agent
+
+Use natural language to stake:
+
+<CodeGroup>
+
+```bash Stake SOL
+"Stake 5 SOL with Jupiter"
+```
+
+```bash Get jupSOL
+"Stake 1.5 SOL for jupSOL"
+```
+
+```bash Liquid staking
+"I want to liquid stake my SOL"
+```
+
+</CodeGroup>
+
+### Supported commands
+
+The AI agent recognizes:
+- "stake sol"
+- "stake with jupiter"
+- "jup staking"
+- "stake with jup"
+- "liquid staking"
+- "get jupsol"
+
+### Staking implementation
+
+Here's how staking works under the hood:
+
+```typescript
+export async function stakeWithJup(
+  agent: SolanaAgentKit,
+  amount: number,
+): Promise<string> {
+  // Request stake transaction from Jupiter
+  const res = await fetch(
+    `https://worker.jup.ag/blinks/swap/` +
+    `So11111111111111111111111111111111111111112/` +  // SOL
+    `jupSoLaHXQiZZTSfEWMTRRgpnyFm8f6sZdosWBjx93v/` +  // jupSOL
+    `${amount}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        account: agent.wallet.publicKey.toBase58(),
+      }),
+    },
+  );
+
+  const data = await res.json();
+
+  // Deserialize and sign transaction
+  const txn = VersionedTransaction.deserialize(
+    Buffer.from(data.transaction, "base64")
+  );
+
+  const { blockhash } = await agent.connection.getLatestBlockhash();
+  txn.message.recentBlockhash = blockhash;
+
+  return await signOrSendTX(agent, txn);
+}
+```
+
+### Stake action parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `amount` | number | Yes | Amount of SOL to stake (must be positive) |
+
+### Response format
+
+```json
+{
+  "status": "success",
+  "transaction": "5KtPn3...",
+  "message": "Successfully staked 1.5 SOL for jupSOL"
+}
+```
+
+<Warning>
+Ensure you keep some SOL unstaked for transaction fees. We recommend keeping at least 0.01 SOL liquid.
+</Warning>
+
+## Understanding jupSOL
+
+### Value appreciation
+
+jupSOL increases in value over time:
+
+```
+Day 1:  1 jupSOL = 1.000 SOL
+Day 30: 1 jupSOL = 1.004 SOL  (0.4% APY/month)
+Day 365: 1 jupSOL = 1.050 SOL (~5% APY)
+```
+
+### Exchange rate
+
+The jupSOL/SOL exchange rate reflects:
+- Accumulated staking rewards
+- Validator performance
+- Network staking yield
+
+<Tip>
+Check the current jupSOL/SOL exchange rate before staking or unstaking to understand your returns.
+</Tip>
+
+## Using jupSOL
+
+Once you have jupSOL, you can:
+
+### Hold for rewards
+
+Simply hold jupSOL in your wallet. The value appreciates automatically as staking rewards accumulate.
+
+### Swap to SOL
+
+Convert jupSOL back to SOL anytime:
+
+```bash
+"Swap my jupSOL to SOL"
+"Exchange 10 jupSOL for SOL"
+```
+
+This unstakes your SOL instantly (no waiting period).
+
+### Use in DeFi
+
+Use jupSOL as collateral or in liquidity pools while earning staking rewards:
+
+- Provide liquidity on DEXs
+- Use as collateral for loans
+- Earn trading fees + staking rewards
+
+<Note>
+Unlike traditional staking, you don't need to wait 2-3 days to unstake. Simply swap jupSOL to SOL via Jupiter Exchange.
+</Note>
+
+## Staking rewards
+
+### Current APY
+
+Solana staking typically yields:
+- **Base staking APY**: 5-7%
+- **Commission fees**: ~5-10% of rewards
+- **Net APY**: 4.5-6.5%
+
+<Tip>
+Rewards are automatically compounded as they're added to the jupSOL value. You don't need to claim or restake.
+</Tip>
+
+### How rewards accrue
+
+Rewards accumulate through:
+
+<Steps>
+  <Step title="Validator rewards">
+    Jupiter stakes with high-performance validators who earn block rewards.
+  </Step>
+  
+  <Step title="Protocol aggregation">
+    Rewards are collected across all validators in the pool.
+  </Step>
+  
+  <Step title="jupSOL appreciation">
+    The jupSOL/SOL exchange rate increases as rewards are added.
+  </Step>
+  
+  <Step title="Automatic compounding">
+    Rewards are automatically compounded - no action needed.
+  </Step>
+</Steps>
+
+## Fees and costs
+
+### Staking transaction
+
+- **Network fee**: ~0.000005 SOL
+- **Jupiter fee**: 0%
+- **Token account creation**: ~0.002 SOL (one-time, if you don't have jupSOL account)
+
+### Validator commission
+
+- **Commission rate**: ~5-10% of staking rewards
+- Already deducted from APY
+- No separate fee to pay
+
+### Unstaking
+
+To convert jupSOL back to SOL:
+- Standard swap fees apply (~0.25%)
+- Network transaction fees
+- No unstaking fee or waiting period
+
+<Note>
+Total cost to stake is minimal - typically less than 0.003 SOL for a new staker.
+</Note>
+
+## Staking strategies
+
+### Conservative approach
+
+```
+Stake: 50% of holdings
+Keep: 50% liquid SOL
+```
+
+**Best for:**
+- First-time stakers
+- Those needing liquidity
+- Short-term holders
+
+### Moderate approach
+
+```
+Stake: 80% of holdings
+Keep: 20% liquid SOL
+```
+
+**Best for:**
+- Regular users
+- Medium-term holders
+- Active DeFi participants
+
+### Aggressive approach
+
+```
+Stake: 95% of holdings
+Keep: 5% for fees
+```
+
+**Best for:**
+- Long-term holders
+- Maximum reward seekers
+- Those with other SOL sources
+
+<Warning>
+Always keep enough SOL for transaction fees. We recommend maintaining at least 0.01 SOL unstaked.
+</Warning>
+
+## Monitoring your stake
+
+### Check jupSOL balance
+
+View your jupSOL balance in the token accounts screen:
+
+```bash
+"Show my token balances"
+"What tokens do I have?"
+```
+
+### Calculate rewards
+
+To see your earned rewards:
+
+```
+Current SOL value = jupSOL balance × current exchange rate
+Rewards earned = Current SOL value - Original SOL staked
+```
+
+### Track performance
+
+- Monitor jupSOL/SOL exchange rate
+- Track APY changes
+- Compare with traditional staking
+- Review validator performance
+
+<Tip>
+Use the price check feature to see current jupSOL value in SOL or USDC terms.
+</Tip>
+
+## Advantages of liquid staking
+
+<CardGroup cols={2}>
+  <Card title="Liquidity" icon="droplet">
+    Unstake instantly via swap - no waiting period like traditional staking
+  </Card>
+  <Card title="DeFi access" icon="coins">
+    Use jupSOL in other protocols while earning staking rewards
+  </Card>
+  <Card title="Auto-compound" icon="rotate">
+    Rewards automatically compound without manual restaking
+  </Card>
+  <Card title="Diversification" icon="chart-network">
+    Jupiter stakes across multiple validators reducing risk
+  </Card>
+</CardGroup>
+
+## Risks and considerations
+
+<AccordionGroup>
+  <Accordion title="Smart contract risk">
+    Jupiter's staking protocol is a smart contract. While audited and battle-tested, all smart contracts carry some risk.
+    
+    **Mitigation:**
+    - Jupiter is one of the most established protocols on Solana
+    - Regular security audits
+    - Large TVL demonstrates trust
+    - Start with smaller amounts
+  </Accordion>
+  
+  <Accordion title="Validator risk">
+    If validators perform poorly, rewards may be lower.
+    
+    **Mitigation:**
+    - Jupiter stakes with multiple high-quality validators
+    - Automatic validator selection and management
+    - Diversification across validator set
+  </Accordion>
+  
+  <Accordion title="Slashing risk">
+    Theoretical risk of validators being slashed (penalized).
+    
+    **Mitigation:**
+    - Currently no slashing on Solana
+    - Jupiter selects reputable validators
+    - Risk is minimal in practice
+  </Accordion>
+  
+  <Accordion title="Price volatility">
+    SOL price may fluctuate regardless of staking.
+    
+    **Consideration:**
+    - Staking doesn't protect against SOL price changes
+    - jupSOL and SOL prices move together
+    - Rewards help offset some volatility
+  </Accordion>
+</AccordionGroup>
+
+## Best practices
+
+### Before staking
+
+- ✅ Understand liquid staking mechanics
+- ✅ Check current APY rates
+- ✅ Keep sufficient SOL for fees
+- ✅ Research Jupiter protocol
+- ✅ Start with test amount
+
+### During staking
+
+- ✅ Confirm transaction details
+- ✅ Verify jupSOL mint address
+- ✅ Save transaction signature
+- ✅ Monitor transaction status
+
+### After staking
+
+- ✅ Verify jupSOL receipt
+- ✅ Track exchange rate changes
+- ✅ Monitor rewards accumulation
+- ✅ Consider DeFi opportunities
+- ✅ Rebalance periodically
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Staking transaction failed">
+    Common causes:
+    - Insufficient SOL balance
+    - Not enough SOL for fees
+    - Network congestion
+    - RPC node issues
+    
+    **Solutions:**
+    - Ensure you have amount + 0.003 SOL for fees
+    - Try again with lower amount
+    - Wait and retry during less congestion
+  </Accordion>
+  
+  <Accordion title="Did not receive jupSOL">
+    If transaction succeeded but no jupSOL:
+    1. Check transaction on explorer
+    2. Refresh token balances
+    3. Verify jupSOL token account exists
+    4. Wait a few moments for balance update
+  </Accordion>
+  
+  <Accordion title="Cannot swap jupSOL back">
+    If unable to unstake:
+    - Ensure you have SOL for swap fees
+    - Check Jupiter Exchange status
+    - Try smaller amount first
+    - Verify jupSOL balance is correct
+  </Accordion>
+</AccordionGroup>
+
+## Comparing staking options
+
+| Feature | Jupiter Liquid Staking | Traditional Staking |
+|---------|----------------------|---------------------|
+| Unstaking time | Instant | 2-3 days |
+| Liquidity | Yes (jupSOL) | No |
+| DeFi usage | Yes | No |
+| Rewards | Auto-compound | Manual compound |
+| APY | ~5-6% | ~5-7% |
+| Minimum | Any amount | Often 1+ SOL |
+| Setup complexity | Simple | More complex |
+
+<Tip>
+Liquid staking is ideal if you want flexibility and the ability to use your staked SOL in DeFi.
+</Tip>
+
+## Related resources
+
+<CardGroup cols={2}>
+  <Card title="Swapping tokens" icon="arrow-right-arrow-left" href="/guides/swapping-tokens">
+    Learn how to swap jupSOL back to SOL
+  </Card>
+  <Card title="DeFi operations" icon="chart-line" href="/guides/defi-operations">
+    Explore other DeFi features
+  </Card>
+  <Card title="Token operations" icon="coins" href="/guides/token-operations">
+    Basic token management
+  </Card>
+  <Card title="Lending" icon="hand-holding-dollar" href="/guides/lending">
+    Use jupSOL as collateral for loans
+  </Card>
+</CardGroup>

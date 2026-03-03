@@ -1,0 +1,434 @@
+---
+title: AI chat interface
+description: Engage with AI-powered conversations to manage your Solana wallet and execute blockchain operations through natural language
+---
+
+The AI chat interface is the core of Synto Mobile, providing an intelligent conversational experience that understands your blockchain intents and executes them seamlessly. Built with React Native and powered by AI SDK, it offers real-time responses with tool execution capabilities.
+
+## Overview
+
+The chat interface combines natural language processing with Solana blockchain operations, allowing users to:
+
+- Swap tokens using conversational commands
+- Check balances and token information
+- Lend and stake assets through DeFi protocols
+- Execute complex blockchain operations without technical knowledge
+
+<Info>
+All blockchain operations require wallet connection and user confirmation through the Mobile Wallet Adapter protocol.
+</Info>
+
+## Chat architecture
+
+The chat system is built on three core components:
+
+<CardGroup cols={3}>
+  <Card title="Multi-chat manager" icon="messages">
+    Handles multiple conversation threads with persistent storage
+  </Card>
+  <Card title="AI agent" icon="robot">
+    Processes natural language and executes blockchain tools
+  </Card>
+  <Card title="Tool manager" icon="wrench">
+    Orchestrates tool invocations with visual feedback
+  </Card>
+</CardGroup>
+
+### Multi-chat system
+
+The `useMultiChat` hook manages conversation history and persistence:
+
+```typescript
+const {
+  currentChat,
+  currentChatId,
+  chatList,
+  createNewChat,
+  loadChat,
+  deleteChat,
+  updateChatTitle,
+  syncMessages,
+  isLoadingChat,
+  isLoadingList
+} = useMultiChat();
+```
+
+**Key capabilities:**
+
+- **Persistent storage**: All conversations are saved locally using AsyncStorage
+- **Auto-titling**: Chat titles are automatically generated from the first user message
+- **Smart sync**: Messages sync automatically without race conditions
+- **Metadata tracking**: Last message, message count, and timestamps are maintained
+
+<Note>
+Chats are stored in AsyncStorage with automatic title generation. Default title "New Chat" updates after the first message.
+</Note>
+
+## Starting a conversation
+
+Users can begin interacting with the AI through multiple entry points:
+
+<Steps>
+  <Step title="Launch the app">
+    Open Synto Mobile and navigate to the chat tab. The most recent conversation loads automatically.
+  </Step>
+  
+  <Step title="Use suggestion cards">
+    Tap one of the pre-built suggestion cards to instantly start a blockchain operation:
+    - "Swap 0.001 SOL to USDC"
+    - "Lend 0.01 sol, against USDC"
+    - "Deposit 5 USDC on Lulo"
+    - "Stake 0.01 SOL with Jupiter"
+  </Step>
+  
+  <Step title="Type your query">
+    Enter any blockchain-related question or command in the input field. The AI understands natural language.
+  </Step>
+</Steps>
+
+### Suggestion cards
+
+Suggestion cards provide quick access to common operations:
+
+```typescript
+const suggestionCards = [
+  {
+    text: "Swap 0.001 SOL to USDC",
+    image: require("@/assets/tool-logos/jupiter-logo.png"),
+  },
+  {
+    text: "Lend 0.01 sol, against USDC",
+    image: require("@/assets/tool-logos/rainfi-logo.png"),
+  },
+  {
+    text: "Deposit 5 USDC on Lulo",
+    image: require("@/assets/tool-logos/lulo-logo.png"),
+  },
+  {
+    text: "Stake 0.01 SOL with Jupiter",
+    image: require("@/assets/tool-logos/jupiter-logo.png"),
+  },
+];
+```
+
+Each card displays the protocol logo and a descriptive action, making it easy for users to discover capabilities.
+
+## Message handling
+
+Messages flow through a sophisticated rendering pipeline:
+
+### User messages
+
+- **Right-aligned bubbles**: Displayed with dark background (#202020)
+- **85% max width**: Ensures readability on all screen sizes
+- **Fade-in animation**: Smooth entrance using react-native-reanimated
+
+### Assistant messages
+
+- **Left-aligned bubbles**: Card background with subtle border
+- **Interactive actions**: Copy and regenerate buttons
+- **Tool invocations**: Embedded execution UI with protocol logos
+
+```typescript
+const renderActionButtons = () => {
+  if (message.role !== "assistant") return null;
+  
+  return (
+    <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+      {!isLoading && (
+        <TouchableOpacity onPress={handleCopy}>
+          <UiIconSymbol 
+            name={isCopied ? "checkmark" : "doc.on.doc"} 
+            size={14} 
+          />
+        </TouchableOpacity>
+      )}
+      
+      {!isLoading && isLast && (
+        <TouchableOpacity onPress={handleRegenerate}>
+          <UiIconSymbol 
+            name="arrow.clockwise" 
+            size={14} 
+          />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+};
+```
+
+<Tabs>
+  <Tab title="Copy message">
+    Users can copy any assistant message to the clipboard by tapping the document icon. A checkmark appears for 2 seconds to confirm.
+  </Tab>
+  
+  <Tab title="Regenerate response">
+    The last assistant message can be regenerated by tapping the refresh icon. This re-runs the AI with the same context.
+  </Tab>
+</Tabs>
+
+## Tool execution workflow
+
+When the AI determines a blockchain operation is needed, it invokes tools:
+
+<Steps>
+  <Step title="Tool invocation">
+    The AI returns a tool call with parameters extracted from the conversation:
+    
+    ```typescript
+    {
+      toolCallId: "call_123",
+      toolName: "TRADE",
+      args: {
+        inputMint: "So11111111111111111111111111111111111111112",
+        outputMint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        amount: 0.001
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Visual confirmation">
+    A tool card appears showing:
+    - Protocol logo (Jupiter, Lulo, Rainfi, etc.)
+    - Tool name formatted for readability
+    - All parameters with values
+    - "Execute Tool" button
+  </Step>
+  
+  <Step title="User approval">
+    User taps "Execute Tool" to proceed. The button shows a loading spinner during execution.
+  </Step>
+  
+  <Step title="Blockchain execution">
+    The tool manager calls the Solana agent to:
+    - Build the transaction
+    - Request wallet signature via Mobile Wallet Adapter
+    - Send to blockchain
+    - Wait for confirmation
+  </Step>
+  
+  <Step title="Result display">
+    Success or error result is displayed inline with the tool card, including transaction signatures.
+  </Step>
+</Steps>
+
+### Tool manager component
+
+The `ToolManager` component handles the execution lifecycle:
+
+```typescript
+const handleToolExecution = async () => {
+  if (!agent || !addToolResult) return;
+  
+  setIsExecuting(true);
+  try {
+    const action = agent.actions.find((a) => a.name === toolName);
+    if (!action) throw new Error(`Tool not found: ${toolName}`);
+    
+    const result = await executeAction(action, agent, args);
+    
+    addToolResult({
+      toolCallId,
+      result: JSON.stringify({ ...result, success: true })
+    });
+  } catch (error) {
+    addToolResult({
+      toolCallId,
+      result: JSON.stringify({ success: false, error })
+    });
+  } finally {
+    setIsExecuting(false);
+  }
+};
+```
+
+<Note>
+Tool execution requires user interaction. The AI cannot execute transactions without explicit user approval through the "Execute Tool" button.
+</Note>
+
+## Supported tools
+
+Synto Mobile integrates with multiple Solana protocols:
+
+| Protocol | Tools | Logo |
+|----------|-------|------|
+| **Jupiter** | Token swaps, limit orders, staking, price fetching | jupiter-logo.png |
+| **Rainfi** | Loan quotes, transaction builder, loan management, repayment | rainfi-logo.png |
+| **Lulo** | Deposits, withdrawals, balance checking | lulo-logo.png |
+| **DexScreener** | Token data and analytics | dexscreener-logo.png |
+| **Pyth** | Real-time price feeds | pyth-logo.png |
+| **Rugcheck** | Token safety verification | rugcheck-logo.png |
+| **Mayan** | Cross-chain swaps | mayan-logo.png |
+| **Solana** | Balance checks, transfers, airdrops, TPS | solana-logo.png |
+
+## Chat history
+
+Users can manage multiple conversations through the history overlay:
+
+### Opening history
+
+Tap the menu icon in the chat header to reveal the history panel, which slides in from the left.
+
+### History features
+
+<CardGroup cols={2}>
+  <Card title="Search conversations" icon="magnifying-glass">
+    Filter chats by title or message content using the search bar
+  </Card>
+  
+  <Card title="Create new chat" icon="plus">
+    Start fresh conversations while preserving existing ones
+  </Card>
+  
+  <Card title="Switch chats" icon="arrow-right-arrow-left">
+    Tap any conversation to load it instantly
+  </Card>
+  
+  <Card title="Delete chats" icon="trash">
+    Remove conversations with confirmation dialog
+  </Card>
+</CardGroup>
+
+### Chat list display
+
+Each conversation card shows:
+
+- **Title**: Auto-generated or custom name
+- **Last message**: Preview of most recent content
+- **Message count**: Total messages in the thread
+- **Timestamp**: Relative time (e.g., "2h ago", "Mon", "Mar 3")
+- **Active indicator**: Blue highlight for current chat
+
+```typescript
+const formatDate = (timestamp: number) => {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+  
+  if (diffInHours < 24) {
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } else if (diffInHours < 168) {
+    return date.toLocaleDateString([], { weekday: "short" });
+  } else {
+    return date.toLocaleDateString([], { month: "short", day: "numeric" });
+  }
+};
+```
+
+## Input methods
+
+The chat input supports multiple interaction modes:
+
+### Text input
+
+- **Multiline support**: Automatically expands up to 120px height
+- **Smart placeholder**: "Ask anything" prompt
+- **Auto-trimming**: Leading/trailing whitespace removed
+- **Submit on send**: Tap the waveform icon to send
+
+### Voice input (coming soon)
+
+The microphone icon is present but voice recognition is not yet implemented.
+
+### Attachments (coming soon)
+
+The plus icon is present but file attachments are not yet implemented.
+
+<Info>
+The input field uses `TextInput` with `multiline` enabled and `textAlignVertical="center"` for optimal mobile UX.
+</Info>
+
+## Loading states
+
+The interface provides clear feedback during operations:
+
+### Chat loading
+
+- Conversation list loads with `isLoadingList` state
+- Individual chat loads with `isLoadingChat` state
+- Empty state shown for no conversations
+
+### Message streaming
+
+- Assistant messages appear word-by-word during AI generation
+- Typing indicators during processing
+- Action buttons disabled while loading
+
+### Tool execution
+
+- Loading spinner replaces the execute button
+- Parameters remain visible during execution
+- Result section appears with colored border (green for success)
+
+## Animations
+
+Smooth animations enhance the user experience:
+
+```typescript
+import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
+
+// Message entrance
+<Animated.View entering={FadeIn.duration(300)}>
+  {/* Message content */}
+</Animated.View>
+
+// Suggestion cards
+<Animated.View entering={FadeInUp.delay(200).duration(600)}>
+  {/* Suggestions */}
+</Animated.View>
+
+// Input field
+<Animated.View entering={FadeInDown.delay(400).duration(600)}>
+  {/* Chat input */}
+</Animated.View>
+```
+
+All animations use `react-native-reanimated` for 60fps performance.
+
+## Error handling
+
+The chat interface gracefully handles failures:
+
+- **Tool execution errors**: Displayed inline with error details
+- **Network failures**: Error messages in assistant responses
+- **Invalid parameters**: AI explains what went wrong
+- **Wallet disconnection**: Prompts user to reconnect
+
+<Warning>
+If a tool execution fails due to authorization errors, the wallet may be automatically disconnected and require reconnection.
+</Warning>
+
+## Best practices
+
+<Steps>
+  <Step title="Be specific">
+    Include amounts, token symbols, and protocol names for faster execution:
+    - Good: "Swap 0.5 SOL to USDC on Jupiter"
+    - Vague: "Swap some tokens"
+  </Step>
+  
+  <Step title="Review parameters">
+    Always check the tool parameters before executing. The AI may misunderstand complex requests.
+  </Step>
+  
+  <Step title="Use suggestions">
+    Start with suggestion cards to learn the AI's capabilities and command patterns.
+  </Step>
+  
+  <Step title="Organize conversations">
+    Create new chats for different types of operations to keep history organized.
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Wallet operations" icon="wallet" href="/features/wallet-operations">
+    Learn about balance management and token transfers
+  </Card>
+  
+  <Card title="Mobile Wallet Adapter" icon="mobile" href="/features/mobile-wallet-adapter">
+    Understand how transactions are signed securely
+  </Card>
+</CardGroup>

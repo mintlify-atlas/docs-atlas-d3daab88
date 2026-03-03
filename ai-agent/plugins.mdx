@@ -1,0 +1,490 @@
+---
+title: Agent plugins
+description: Deep dive into Synto Mobile's plugin architecture and available plugins for tokens and DeFi
+---
+
+Plugins are the building blocks of the Synto Mobile AI agent. Each plugin adds a specific set of capabilities, from token operations to DeFi integrations. This modular design makes the agent extensible and maintainable.
+
+## Plugin architecture
+
+Every plugin follows a standard interface that the agent understands:
+
+```typescript
+interface Plugin {
+  name: string;                          // Unique identifier
+  methods: Record<string, any>;          // Callable functions
+  actions: Action[];                     // Available actions
+  initialize(agent: SolanaAgentKit): void; // Setup hook
+}
+```
+
+<Note>
+Plugins are loaded when the agent initializes and cannot be added or removed at runtime.
+</Note>
+
+### How plugins work
+
+When you add a plugin to the agent:
+
+1. **Registration** - Plugin is registered in the agent's plugin map
+2. **Initialization** - `initialize()` is called with agent instance
+3. **Method binding** - All plugin methods are bound to the agent's `methods` object
+4. **Action registration** - Actions are added to the agent's action list
+
+```typescript
+// Adding a plugin
+const agent = new SolanaAgentKit(wallet, rpc, config);
+const agentWithPlugin = agent.use(TokenPlugin);
+
+// Now you can call plugin methods
+agentWithPlugin.methods.transfer(recipient, amount);
+```
+
+Source: `utils/syntoUtils/agent/core/index.ts:61`
+
+### Method conflicts
+
+The agent prevents method name conflicts:
+
+<Warning>
+If two plugins try to register a method with the same name, the agent throws an error. Method names must be unique across all loaded plugins.
+</Warning>
+
+## Available plugins
+
+Synto Mobile includes two core plugins:
+
+<CardGroup cols={2}>
+  <Card title="Token plugin" icon="coins">
+    Token transfers, swaps, balances, and data
+  </Card>
+  <Card title="DeFi plugin" icon="landmark">
+    Lending, borrowing, and loan management
+  </Card>
+</CardGroup>
+
+## Token plugin
+
+The Token plugin provides comprehensive token and trading capabilities.
+
+### Overview
+
+- **Name:** `token`
+- **Methods:** 12 callable functions
+- **Actions:** 12 natural language actions
+- **Integrations:** DexScreener, Jupiter, Solana RPC
+
+Source: `utils/syntoUtils/agent/plugins/plugin-token/index.ts:44`
+
+### Available methods
+
+<AccordionGroup>
+  <Accordion title="Token data methods" icon="database">
+    **DexScreener integration:**
+    - `getTokenDataByAddress` - Get token info by mint address
+    - `getTokenAddressFromTicker` - Look up address by symbol
+
+    **Jupiter integration:**
+    - `fetchPrice` - Get current token price in USDC
+    - `stakeWithJup` - Stake JUP tokens
+    - `trade` - Execute token swap on Jupiter
+
+    These methods connect to external APIs to provide real-time market data.
+  </Accordion>
+
+  <Accordion title="Balance methods" icon="wallet">
+    **Check balances:**
+    - `get_balance` - Your SOL balance
+    - `get_balance_other` - Another wallet's SOL balance  
+    - `get_token_balance` - Specific SPL token balance
+
+    All balance methods return amounts in both lamports and decimal format.
+  </Accordion>
+
+  <Accordion title="Transaction methods" icon="arrow-right-arrow-left">
+    **Execute transactions:**
+    - `transfer` - Send SOL or SPL tokens
+    - `closeEmptyTokenAccounts` - Reclaim rent from empty accounts
+    - `request_faucet_funds` - Get devnet/testnet SOL
+
+    All transaction methods return the transaction signature on success.
+  </Accordion>
+
+  <Accordion title="Utility methods" icon="wrench">
+    **Blockchain utilities:**
+    - `getTPS` - Current Solana transactions per second
+    - `getWalletAddress` - Your wallet's public key
+
+    These provide helpful blockchain information without executing transactions.
+  </Accordion>
+</AccordionGroup>
+
+### Actions
+
+The Token plugin includes 12 actions triggered by natural language:
+
+<Tabs>
+  <Tab title="Transfer">
+    **Action:** `TRANSFER`
+
+    **Triggers:**
+    - "send tokens"
+    - "transfer funds"
+    - "send money"
+    - "send sol"
+    - "transfer tokens"
+
+    **Schema:**
+    ```typescript
+    {
+      to: string (min 32 chars),
+      amount: number (positive),
+      mint?: string (optional)
+    }
+    ```
+
+    Source: `utils/syntoUtils/agent/plugins/plugin-token/solana/actions/transfer.ts:6`
+  </Tab>
+
+  <Tab title="Trade">
+    **Action:** `TRADE`
+
+    **Triggers:**
+    - "swap tokens"
+    - "exchange tokens"
+    - "trade tokens"
+    - "convert tokens"
+    - "swap sol"
+
+    **Schema:**
+    ```typescript
+    {
+      outputMint: string (min 32 chars),
+      inputAmount: number (positive),
+      inputMint?: string,
+      slippageBps?: number (0-10000)
+    }
+    ```
+
+    Source: `utils/syntoUtils/agent/plugins/plugin-token/jupiter/actions/trade.ts:6`
+  </Tab>
+
+  <Tab title="Balance">
+    **Action:** `BALANCE`
+
+    **Triggers:**
+    - "check balance"
+    - "show balance"
+    - "my balance"
+    - "wallet balance"
+
+    Returns your current SOL balance in lamports and SOL.
+
+    Source: `utils/syntoUtils/agent/plugins/plugin-token/solana/actions/balance.ts`
+  </Tab>
+
+  <Tab title="Other actions">
+    **Additional actions:**
+
+    - `GET_TOKEN_DATA` - Token info by address
+    - `TOKEN_DATA_BY_TICKER` - Token info by symbol
+    - `FETCH_PRICE` - Current token price
+    - `STAKE_WITH_JUP` - Stake JUP tokens
+    - `TOKEN_BALANCES` - All token balances
+    - `GET_TPS` - Network TPS
+    - `CLOSE_EMPTY_TOKEN_ACCOUNTS` - Clean up accounts
+    - `REQUEST_FUNDS` - Devnet airdrop
+    - `WALLET_ADDRESS` - Your public key
+  </Tab>
+</Tabs>
+
+### Forbidden actions
+
+Some actions are explicitly disabled for safety:
+
+```typescript
+const FORBIDDEN_ACTIONS = ["LAUNCH_PUMPFUN_TOKEN"];
+TokenPlugin.actions = TokenPlugin.actions.filter(
+  ({ name }) => !FORBIDDEN_ACTIONS.includes(name)
+);
+```
+
+Source: `utils/syntoUtils/agent/agentBuilder.ts:15`
+
+<Warning>
+The PumpFun token launch action is disabled to prevent accidental token creation.
+</Warning>
+
+## DeFi plugin
+
+The DeFi plugin integrates with Rainfi for decentralized lending and borrowing.
+
+### Overview
+
+- **Name:** `defi`
+- **Methods:** 4 callable functions
+- **Actions:** 4 natural language actions
+- **Integrations:** Rainfi Protocol
+
+Source: `utils/syntoUtils/agent/plugins/plugin-defi/index.ts:18`
+
+### Rainfi integration
+
+Rainfi is a decentralized lending protocol on Solana that allows:
+
+- **Collateralized loans** - Borrow against your crypto
+- **Short-term lending** - Typically 7-day loan periods
+- **Multiple currencies** - Support for SOL, USDC, and other tokens
+- **Transparent rates** - Clear APR and fee structure
+
+### Available methods
+
+<Tabs>
+  <Tab title="Quote calculator">
+    **Method:** `quoteLoanCalculator`
+
+    Calculate loan terms before borrowing.
+
+    **Parameters:**
+    ```typescript
+    {
+      amountIn: number,      // Collateral amount
+      currencyIn: string,    // Collateral token address
+      currencyOut: string,   // Borrow token address
+      borrower: string       // Your wallet (auto-filled)
+    }
+    ```
+
+    **Returns:**
+    ```typescript
+    {
+      simulation: {
+        amount: number,
+        duration: number,
+        interest: number,
+        rainFees: number,
+        apr: number,
+        authorization: string,
+        bank: string,
+        pool: string
+      },
+      options: { prioritizationFeeLamports: string },
+      slippage: number
+    }
+    ```
+
+    Source: `utils/syntoUtils/agent/plugins/plugin-defi/rainfi/actions/quoteLoanCalculator.ts:5`
+  </Tab>
+
+  <Tab title="Transaction builder">
+    **Method:** `RainfiTransactionBuilder`
+
+    Build the loan transaction from a quote.
+
+    **What it does:**
+    - Takes quote authorization
+    - Constructs loan transaction
+    - Includes all necessary accounts
+    - Returns unsigned transaction
+
+    This method is called automatically by the agent after getting a quote.
+  </Tab>
+
+  <Tab title="Get user loans">
+    **Method:** `GetUserLoans`
+
+    Retrieve all active loans for your wallet.
+
+    **Returns:**
+    - Array of loan positions
+    - Collateral amounts
+    - Borrowed amounts
+    - Interest accrued
+    - Due dates
+
+    Source: `utils/syntoUtils/agent/plugins/plugin-defi/rainfi/actions/GetUserLoans.ts`
+  </Tab>
+
+  <Tab title="Repay loan">
+    **Method:** `RepayLoan`
+
+    Pay back a loan to reclaim collateral.
+
+    **What it does:**
+    - Calculates total repayment (principal + interest)
+    - Transfers repayment tokens from your wallet
+    - Returns collateral to your wallet
+    - Closes loan position
+
+    Source: `utils/syntoUtils/agent/plugins/plugin-defi/rainfi/actions/RepayLoan.ts`
+  </Tab>
+</Tabs>
+
+### Actions
+
+The DeFi plugin provides 4 natural language actions:
+
+<CardGroup cols={2}>
+  <Card title="RAINFI_QUOTE_LOAN_CALCULATOR" icon="calculator">
+    **Triggers:**
+    - "quote loan calculator"
+    - "calculate loan"
+    - "get loan quote"
+    - "loan quote calculator"
+  </Card>
+  <Card title="RAINFI_TRANSACTION_BUILDER" icon="hammer">
+    Builds loan transactions from quotes
+  </Card>
+  <Card title="RAINFI_GET_USER_LOANS" icon="list">
+    Retrieves all your active loans
+  </Card>
+  <Card title="RAINFI_REPAY_LOAN" icon="money-bill-transfer">
+    Repays loans and reclaims collateral
+  </Card>
+</CardGroup>
+
+### Loan quote workflow
+
+The typical flow for taking out a loan:
+
+1. **Get quote** - Calculate loan terms
+2. **Review terms** - Agent displays quote for confirmation
+3. **Build transaction** - Construct the loan transaction
+4. **Sign and send** - Execute the loan
+
+<Note>
+Important: Always review the loan quote before proceeding. The agent will display all terms including interest rate, fees, and repayment amount.
+</Note>
+
+## Plugin initialization
+
+Plugins initialize differently based on their needs:
+
+<Tabs>
+  <Tab title="Token plugin">
+    ```typescript
+    initialize: function (): void {
+      for (const [methodName, method] of Object.entries(this.methods)) {
+        if (typeof method === "function") {
+          this.methods[methodName] = method;
+        }
+      }
+    }
+    ```
+
+    The Token plugin performs simple method registration without binding to the agent.
+  </Tab>
+
+  <Tab title="DeFi plugin">
+    ```typescript
+    initialize: function (agent: SolanaAgentKit): void {
+      Object.entries(this.methods).forEach(([methodName, method]) => {
+        if (typeof method === "function") {
+          this.methods[methodName] = method.bind(null, agent);
+        }
+      });
+    }
+    ```
+
+    The DeFi plugin binds all methods to receive the agent instance as the first parameter.
+
+    Source: `utils/syntoUtils/agent/plugins/plugin-defi/index.ts:43`
+  </Tab>
+</Tabs>
+
+## Creating custom plugins
+
+You can extend the agent with custom plugins:
+
+```typescript
+const customPlugin: Plugin = {
+  name: "myPlugin",
+  
+  methods: {
+    myMethod: async (agent: SolanaAgentKit, ...args) => {
+      // Your custom logic
+      return result;
+    }
+  },
+  
+  actions: [
+    {
+      name: "MY_ACTION",
+      similes: ["do something", "perform action"],
+      description: "What this action does",
+      examples: [[...examples]],
+      schema: z.object({...}),
+      handler: async (agent, input) => {
+        // Action handler
+        return result;
+      }
+    }
+  ],
+  
+  initialize: (agent: SolanaAgentKit) => {
+    // Initialization logic
+  }
+};
+
+// Use your plugin
+const agent = agentBuilder(walletFns).use(customPlugin);
+```
+
+<Warning>
+Custom plugins must follow the Plugin interface exactly or the agent will reject them.
+</Warning>
+
+## Plugin best practices
+
+When working with plugins:
+
+<AccordionGroup>
+  <Accordion title="Unique method names">
+    Ensure all method names are unique across plugins to avoid conflicts. The agent will throw an error if methods collide.
+  </Accordion>
+
+  <Accordion title="Clear action triggers">
+    Use descriptive and distinct similes for actions. Avoid overlapping trigger phrases that could confuse the AI.
+  </Accordion>
+
+  <Accordion title="Input validation">
+    Always use Zod schemas to validate action inputs. This prevents runtime errors and provides clear error messages.
+  </Accordion>
+
+  <Accordion title="Error handling">
+    Methods should catch errors and return structured responses:
+    
+    ```typescript
+    try {
+      const result = await doOperation();
+      return { status: "success", data: result };
+    } catch (error) {
+      return { 
+        status: "error", 
+        message: error.message 
+      };
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Agent binding">
+    If your methods need the agent instance, bind them in the `initialize` function:
+
+    ```typescript
+    initialize: (agent: SolanaAgentKit) => {
+      this.methods.myMethod = this.methods.myMethod.bind(null, agent);
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="See capabilities" icon="wand-magic-sparkles" href="/ai-agent/capabilities">
+    Explore what the plugins can do
+  </Card>
+  <Card title="Agent overview" icon="robot" href="/ai-agent/overview">
+    Learn about the core architecture
+  </Card>
+</CardGroup>
