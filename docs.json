@@ -75,7 +75,8 @@
             "group": "Agent Core",
             "pages": [
               "api/solana-agent-kit",
-              "api/agent-builder"
+              "api/agent-builder",
+              "api/tool-creators"
             ]
           },
           {

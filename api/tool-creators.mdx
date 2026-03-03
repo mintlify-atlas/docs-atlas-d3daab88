@@ -1,0 +1,250 @@
+---
+title: Tool creator functions
+description: Functions for converting agent actions into AI framework tools
+---
+
+## Overview
+
+Synto Mobile provides two tool creator functions that convert `SolanaAgentKit` actions into framework-specific tools for AI integration. These functions enable you to use the agent with popular AI frameworks like LangChain and Vercel AI SDK.
+
+Both functions are exported from the main agent module:
+
+```typescript
+import { createLangchainTools, createVercelAITools } from '@/utils/syntoUtils/agent';
+```
+
+<Note>
+  These functions automatically handle up to 128 actions. If more actions are provided, only the first 127 will be converted, and a warning will be logged.
+</Note>
+
+---
+
+## createVercelAITools
+
+Converts agent actions into tools compatible with the Vercel AI SDK's `streamText` and `generateText` functions.
+
+### Function signature
+
+```typescript
+createVercelAITools(
+  solanaAgentKit: SolanaAgentKit,
+  actions: Action[]
+): Record<string, any>
+```
+
+<ParamField path="solanaAgentKit" type="SolanaAgentKit" required>
+  The configured agent instance that will execute the tool operations.
+</ParamField>
+
+<ParamField path="actions" type="Action[]" required>
+  Array of actions to convert into Vercel AI tools. Typically use `agent.actions` to include all registered plugin actions.
+</ParamField>
+
+### Returns
+
+<ResponseField name="tools" type="Record<string, any>">
+  Object mapping action names to Vercel AI tool objects. Each tool includes:
+  - `description` - Natural language description of what the tool does
+  - `inputSchema` - Zod schema for validating tool inputs
+</ResponseField>
+
+### Example usage
+
+```typescript
+import { useChat } from 'ai/react';
+import { useSolanaAgent } from '@/hooks/use-agent';
+
+function ChatComponent() {
+  const { agent } = useSolanaAgent();
+  
+  // Create Vercel AI tools from agent actions
+  const tools = agent ? createVercelAITools(agent, agent.actions) : {};
+
+  const { messages, input, handleInputChange, handleSubmit } = useChat({
+    api: '/api/chat',
+    body: { tools },
+  });
+
+  return (
+    <div>
+      {messages.map(m => (
+        <div key={m.id}>{m.content}</div>
+      ))}
+      <form onSubmit={handleSubmit}>
+        <input value={input} onChange={handleInputChange} />
+      </form>
+    </div>
+  );
+}
+```
+
+### Real implementation
+
+From `hooks/use-agent.tsx:54-59`:
+
+```typescript
+// Create tools for AI integration
+const tools = useMemo(() => {
+  if (agent) {
+    return createVercelAITools(agent, agent.actions);
+  }
+  return null;
+}, [agent]);
+```
+
+### Tool structure
+
+Each generated tool has this structure:
+
+```typescript
+{
+  "TRANSFER": {
+    description: "Transfer SOL or SPL tokens to another wallet...",
+    inputSchema: z.object({
+      to: z.string(),
+      amount: z.number(),
+      mint: z.string().optional()
+    })
+  },
+  "GET_BALANCE": {
+    description: "Get SOL balance for the agent's wallet...",
+    inputSchema: z.object({})
+  },
+  // ... more tools
+}
+```
+
+---
+
+## createLangchainTools
+
+Converts agent actions into LangChain-compatible tool instances that can be used with LangChain agents and chains.
+
+### Function signature
+
+```typescript
+createLangchainTools(
+  solanaAgentKit: SolanaAgentKit,
+  actions: Action[]
+): StructuredToolInterface[]
+```
+
+<ParamField path="solanaAgentKit" type="SolanaAgentKit" required>
+  The configured agent instance that will execute the tool operations.
+</ParamField>
+
+<ParamField path="actions" type="Action[]" required>
+  Array of actions to convert into LangChain tools. Typically use `agent.actions` to include all registered plugin actions.
+</ParamField>
+
+### Returns
+
+<ResponseField name="tools" type="StructuredToolInterface[]">
+  Array of LangChain tool instances. Each tool includes:
+  - `name` - Action name (e.g., "TRANSFER", "GET_BALANCE")
+  - `description` - Detailed description including similes and examples
+  - `schema` - Zod object schema for input validation
+  - Handler function that executes the action
+</ResponseField>
+
+### Example usage
+
+```typescript
+import { ChatOpenAI } from "@langchain/openai";
+import { AgentExecutor, createToolCallingAgent } from "langchain/agents";
+import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { createLangchainTools } from '@/utils/syntoUtils/agent';
+
+// Create agent instance
+const agent = agentBuilder(walletFunctions);
+
+// Convert to LangChain tools
+const tools = createLangchainTools(agent, agent.actions);
+
+// Create LangChain agent
+const llm = new ChatOpenAI({ modelName: "gpt-4" });
+const prompt = ChatPromptTemplate.fromMessages([
+  ["system", "You are a helpful Solana blockchain assistant."],
+  ["human", "{input}"],
+  ["placeholder", "{agent_scratchpad}"],
+]);
+
+const langchainAgent = await createToolCallingAgent({ llm, tools, prompt });
+const executor = new AgentExecutor({ agent: langchainAgent, tools });
+
+// Execute natural language commands
+const result = await executor.invoke({
+  input: "Transfer 0.1 SOL to 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"
+});
+```
+
+### Tool description format
+
+LangChain tools include rich descriptions with examples:
+
+```typescript
+{
+  name: "TRANSFER",
+  description: `
+    Transfer SOL or SPL tokens to another wallet address.
+    
+    Similes: 
+      - send tokens
+      - transfer funds
+      - pay someone
+    
+    Examples:
+      Input: { "to": "7xKXtg...", "amount": 0.1 }
+      Output: { "signature": "5j7s..." }
+      Explanation: Transferred 0.1 SOL to the recipient
+  `,
+  schema: z.object({
+    to: z.string().describe("Recipient wallet address"),
+    amount: z.number().describe("Amount to transfer"),
+    mint: z.string().optional().describe("Token mint address (omit for SOL)")
+  })
+}
+```
+
+---
+
+## Action limits
+
+Both functions enforce a maximum of 128 actions (actually 127 due to implementation):
+
+```typescript
+// From vercel-ai/index.ts:9-15
+if (actions.length > 128) {
+  console.warn(
+    `Too many actions provided. Only a maximum of 128 actions allowed. ` +
+    `You provided ${actions.length}, the last ${actions.length - 128} will be ignored.`
+  );
+}
+
+for (const action of actions.slice(0, 127)) {
+  // Convert action to tool
+}
+```
+
+<Warning>
+  If you have more than 128 actions registered across your plugins, only the first 127 will be available to the AI. Consider filtering `agent.actions` to include only essential operations.
+</Warning>
+
+---
+
+## Related resources
+
+<CardGroup cols={2}>
+  <Card title="SolanaAgentKit" icon="robot" href="/api/solana-agent-kit">
+    Core agent class documentation
+  </Card>
+  <Card title="Agent builder" icon="wrench" href="/api/agent-builder">
+    Factory function for creating agents
+  </Card>
+  <Card title="AI agent overview" icon="brain" href="/ai-agent/overview">
+    Understanding the agent system
+  </Card>
+  <Card title="useAgent hook" icon="react" href="/development/hooks#useagent">
+    React hook for agent integration
+  </Card>
+</CardGroup>

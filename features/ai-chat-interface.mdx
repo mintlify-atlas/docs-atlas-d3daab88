@@ -75,10 +75,11 @@ Users can begin interacting with the AI through multiple entry points:
   
   <Step title="Use suggestion cards">
     Tap one of the pre-built suggestion cards to instantly start a blockchain operation:
-    - "Swap 0.001 SOL to USDC"
-    - "Lend 0.01 sol, against USDC"
-    - "Deposit 5 USDC on Lulo"
+    - "Swap 0.001 SOL to USDC" (Jupiter)
+    - "Lend 0.01 sol, against USDC" (Rainfi)
     - "Stake 0.01 SOL with Jupiter"
+    
+    <Note>Some suggestion cards may reference features in development.</Note>
   </Step>
   
   <Step title="Type your query">
@@ -249,18 +250,18 @@ Tool execution requires user interaction. The AI cannot execute transactions wit
 
 ## Supported tools
 
-Synto Mobile integrates with multiple Solana protocols:
+Synto Mobile currently integrates with the following Solana protocols:
 
-| Protocol | Tools | Logo |
-|----------|-------|------|
-| **Jupiter** | Token swaps, limit orders, staking, price fetching | jupiter-logo.png |
-| **Rainfi** | Loan quotes, transaction builder, loan management, repayment | rainfi-logo.png |
-| **Lulo** | Deposits, withdrawals, balance checking | lulo-logo.png |
-| **DexScreener** | Token data and analytics | dexscreener-logo.png |
-| **Pyth** | Real-time price feeds | pyth-logo.png |
-| **Rugcheck** | Token safety verification | rugcheck-logo.png |
-| **Mayan** | Cross-chain swaps | mayan-logo.png |
-| **Solana** | Balance checks, transfers, airdrops, TPS | solana-logo.png |
+| Protocol | Tools | Status |
+|----------|-------|--------|
+| **Jupiter** | Token swaps, staking, price fetching | ✅ Fully implemented |
+| **Rainfi** | Loan quotes, transaction builder, loan management, repayment | ✅ Fully implemented |
+| **DexScreener** | Token data and analytics | ✅ Fully implemented |
+| **Solana** | Balance checks, transfers, airdrops, TPS | ✅ Fully implemented |
+
+<Note>
+  The UI includes suggestion cards and tool registry entries for additional protocols (Lulo, Pyth, Rugcheck, Mayan, deBridge), but these integrations are not yet fully implemented in the current version.
+</Note>
 
 ## Chat history
 
